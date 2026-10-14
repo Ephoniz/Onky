@@ -1,0 +1,20 @@
+[package]
+name = "audio-program-backend"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+publish.workspace = true
+description = "Virtual-cable backends for Audio Program"
+
+[dependencies]
+audio-program-engine = { path = "../engine" }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+pipewire = { version = "0.10.1", features = ["v1_0_0"] }
+
+[target.'cfg(windows)'.dependencies]
+wasapi = "0.26"
+
+[lints]
+workspace = true
