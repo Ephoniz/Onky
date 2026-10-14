@@ -29,8 +29,7 @@ param(
 $ErrorActionPreference = 'Stop'
 . "$PSScriptRoot\AudioProgramCable.Common.ps1"
 
-if (-not $PackageDir) { $PackageDir = Join-Path $script:ApcDriverRoot 'build\package' }
-$PackageDir = [IO.Path]::GetFullPath($PackageDir)
+$PackageDir = Resolve-ApcPackageDir -PackageDir $PackageDir -BaseName $BaseName
 $sys = Join-Path $PackageDir "$BaseName.sys"
 $inf = Join-Path $PackageDir "$BaseName.inf"
 $cat = Join-Path $PackageDir "$BaseName.cat"

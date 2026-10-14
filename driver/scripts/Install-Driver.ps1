@@ -64,7 +64,7 @@ $pnputil = "$env:SystemRoot\System32\pnputil.exe"
 
 if ($Devcon) {
     if (-not (Test-Path -LiteralPath $Devcon -PathType Leaf)) { throw "devcon.exe not found at $Devcon" }
-    $verb = if (@(Get-ApcDevices -HardwareId $HardwareId).Count -gt 0) { 'update' } else { 'install' }
+    $verb = if (@(Get-ApcDevices -HardwareId $HardwareId | Where-Object { $_.Present }).Count -gt 0) { 'update' } else { 'install' }
     Write-Host "Running devcon $verb"
     $code = Invoke-Native $Devcon @($verb, $inf, $HardwareId) -AllowedExitCodes @(0, 1)
     if ($code -eq 1) { $reboot = $true }
@@ -74,7 +74,8 @@ if ($Devcon) {
     if ($code -eq 3010) { $reboot = $true }
 
     Initialize-ApcSetupApi
-    if (@(Get-ApcDevices -HardwareId $HardwareId).Count -eq 0) {
+    # A removed device can linger as "not present"; it cannot take a driver.
+    if (@(Get-ApcDevices -HardwareId $HardwareId | Where-Object { $_.Present }).Count -eq 0) {
         Write-Host "Creating root device $HardwareId"
         [ApcSetupApi]::CreateRootDevice($inf, $HardwareId)
     } else {
@@ -85,7 +86,7 @@ if ($Devcon) {
 }
 
 Start-Sleep -Seconds 3
-$devices = @(Get-ApcDevices -HardwareId $HardwareId)
+$devices = @(Get-ApcDevices -HardwareId $HardwareId | Where-Object { $_.Present })
 $devices | Format-Table -AutoSize Status, Problem, FriendlyName, InstanceId | Out-Host
 
 if ($reboot) {
