@@ -1,0 +1,5 @@
+/build/
+/packages/
+/smoke-test/sonicanvas/work/
+*.user
+.vs/
