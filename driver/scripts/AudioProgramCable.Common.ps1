@@ -2,8 +2,6 @@
 # Shared helpers for the Audio Program Cable driver scripts. Dot-source it:
 #   . "$PSScriptRoot\AudioProgramCable.Common.ps1"
 
-Set-StrictMode -Version 3.0
-
 $script:ApcServiceName = 'AudioProgramCable'
 $script:ApcHardwareId  = 'ROOT\AudioProgramCable'
 $script:ApcInfName     = 'AudioProgramCable.inf'

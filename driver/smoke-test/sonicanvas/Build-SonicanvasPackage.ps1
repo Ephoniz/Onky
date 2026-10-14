@@ -46,8 +46,13 @@ $head = (& $git -C $source rev-parse HEAD).Trim()
 if ($head -ne $Commit) { throw "Checked out $head, expected $Commit." }
 Write-Host "Sonicanvas source at $head"
 
-& (Join-Path $source 'windows\scripts\build-driver.ps1') -Configuration Release -RestorePackages
-& (Join-Path $source 'windows\scripts\package-driver-test.ps1') -Configuration Release
+# Run the upstream scripts in their own Windows PowerShell process, as upstream CI does.
+$powershell = Join-Path $PSHOME 'powershell.exe'
+if (-not (Test-Path -LiteralPath $powershell)) { $powershell = "$env:SystemRoot\System32\WindowsPowerShell\v1.0\powershell.exe" }
+Invoke-Native $powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    (Join-Path $source 'windows\scripts\build-driver.ps1'), '-Configuration', 'Release', '-RestorePackages') | Out-Null
+Invoke-Native $powershell @('-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+    (Join-Path $source 'windows\scripts\package-driver-test.ps1'), '-Configuration', 'Release') | Out-Null
 
 $package = Join-Path $source 'build\windows-driver-test\driver'
 foreach ($name in @('SonicanvasAudio.sys', 'SonicanvasAudio.inf', 'SonicanvasAudio.cat', 'SonicanvasDriverTest.cer')) {
