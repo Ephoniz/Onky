@@ -1,0 +1,59 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fmt:
+    name: fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: rustfmt
+      - run: cargo fmt --all -- --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: clippy
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y pkg-config clang libclang-dev libpipewire-0.3-dev libxkbcommon-dev libwayland-dev libx11-dev libegl1-mesa-dev libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev libxfixes-dev libgl1-mesa-dev libssl-dev
+      - run: cargo clippy --all-targets -- -D warnings
+
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Install system libraries
+        run: sudo apt-get update && sudo apt-get install -y pkg-config clang libclang-dev libpipewire-0.3-dev libxkbcommon-dev libwayland-dev libx11-dev libegl1-mesa-dev libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev libxfixes-dev libgl1-mesa-dev libssl-dev
+      - run: cargo test --workspace
+      - name: Release CPU budget
+        run: cargo test -p audio-program-engine --release --lib reference_session_cpu_budget -- --nocapture
+
+  windows:
+    name: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - run: cargo build --workspace
+
+  deny:
+    name: deny
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
