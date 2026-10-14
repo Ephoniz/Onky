@@ -1,0 +1,25 @@
+name: driver
+
+on:
+  push:
+    paths:
+      - "driver/**"
+      - ".github/workflows/driver.yml"
+  pull_request:
+    paths:
+      - "driver/**"
+      - ".github/workflows/driver.yml"
+  workflow_dispatch:
+
+jobs:
+  probe:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - shell: pwsh
+        run: |
+          $PSVersionTable
+          & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -all -products * -format text | Select-String 'displayName|installationVersion'
+          Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\Include" -ErrorAction SilentlyContinue
+          Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\build" -ErrorAction SilentlyContinue
+          where.exe nuget
