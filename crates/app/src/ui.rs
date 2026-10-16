@@ -21,7 +21,7 @@ pub fn install_style(ctx: &egui::Context) {
     ctx.set_visuals(visuals);
 }
 
-pub fn draw(ui: &mut egui::Ui, session: &mut Session) {
+pub fn draw(ui: &mut egui::Ui, session: &mut Session, updates: Option<&mut bool>) {
     egui::Panel::top("bar").show(ui, |ui| {
         ui.add_space(8.0);
         ui.horizontal(|ui| {
@@ -32,6 +32,9 @@ pub fn draw(ui: &mut egui::Ui, session: &mut Session) {
                     .color(INK),
             );
             ui.label(RichText::new("48 kHz · 10 ms").color(MUTED));
+            if let Some(enabled) = updates {
+                ui.checkbox(enabled, "Check for updates");
+            }
         });
         ui.add_space(8.0);
     });
