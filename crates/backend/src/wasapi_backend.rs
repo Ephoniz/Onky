@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use audio_program_engine::Shared;
-use wasapi::{initialize_mta, DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat};
+use wasapi::{initialize_sta, DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat};
 
 use crate::{
     BackendError, CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend,
@@ -18,7 +18,9 @@ pub struct WasapiBackend;
 
 impl WasapiBackend {
     pub fn connect() -> Result<Self, BackendError> {
-        let result = initialize_mta();
+        // The mixer window runs on this thread. A multithreaded apartment makes
+        // the window's OleInitialize fail, so the process exits before anything is shown.
+        let result = initialize_sta();
         if result.is_err() {
             return Err(BackendError::Unavailable(format!(
                 "COM initialize failed: {result:?}"
@@ -107,3 +109,7 @@ impl VirtualCableBackend for WasapiBackend {
         ))
     }
 }
+
+#[cfg(test)]
+#[path = "wasapi_tests.rs"]
+mod tests;

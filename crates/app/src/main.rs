@@ -1,15 +1,20 @@
 //! Audio Program mixer.
 
-use audio_program::{draw, install_style, Session};
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+use audio_program::{
+    attach_parent_console, draw, install_panic_hook, install_style, report_startup_failure, Session,
+};
 
 fn main() {
     let headless = std::env::args().any(|arg| arg == "--headless");
-    let session = Session::start();
     if headless {
-        run_headless(session);
+        attach_parent_console();
+        run_headless(Session::start());
         return;
     }
-    launch_window(session);
+    install_panic_hook();
+    launch_window(Session::start());
 }
 
 fn run_headless(session: Session) {
@@ -44,8 +49,7 @@ fn launch_window(session: Session) {
         }),
     );
     if let Err(err) = result {
-        eprintln!("audio-program: {err}");
-        std::process::exit(1);
+        report_startup_failure(&err.to_string());
     }
 }
 
