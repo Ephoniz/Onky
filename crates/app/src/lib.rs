@@ -1,7 +1,10 @@
 //! Session wiring for the Audio Program mixer.
 
+#[cfg(any(test, windows))]
+mod layout;
 mod session;
 mod startup;
+mod strip;
 mod ui;
 mod update;
 
