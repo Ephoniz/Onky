@@ -18,7 +18,7 @@
 .EXAMPLE
     .\Install-Driver.ps1
 .EXAMPLE
-    .\Install-Driver.ps1 -Devcon 'C:\Program Files (x86)\Windows Kits\10\Tools\10.0.26100.0\x64\devcon.exe'
+    .\Install-Driver.ps1 -Devcon 'C:\Program Files (x86)\Windows Kits\10\Tools\10.0.28000.0\x64\devcon.exe'
 #>
 [CmdletBinding()]
 param(

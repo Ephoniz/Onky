@@ -4,7 +4,7 @@
     Builds AudioProgramCable.sys with the WDK and assembles a driver package.
 
 .DESCRIPTION
-    Run from a Visual Studio 2022 Developer PowerShell (or any shell where
+    Run from a Visual Studio 2026 Developer PowerShell (or any shell where
     msbuild.exe is on PATH, or where vswhere can find Visual Studio with the
     C++ workload). The Windows SDK and WDK come from NuGet with
     -RestorePackages, so no separate WDK install is needed.
@@ -60,7 +60,7 @@ function Find-MSBuild {
         $found = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\amd64\MSBuild.exe' | Select-Object -First 1
         if ($found) { return $found }
     }
-    throw 'msbuild.exe not found. Install Visual Studio 2022 with "Desktop development with C++", or run from a Developer PowerShell.'
+    throw 'msbuild.exe not found. Install Visual Studio 2026 with "Desktop development with C++", or run from a Developer PowerShell.'
 }
 
 if ($RestorePackages) {

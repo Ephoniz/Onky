@@ -5,8 +5,8 @@
 $script:ApcServiceName = 'AudioProgramCable'
 $script:ApcHardwareId  = 'ROOT\AudioProgramCable'
 $script:ApcInfName     = 'AudioProgramCable.inf'
-$script:ApcKitVersion  = '10.0.26100.6584'
-$script:ApcKitBin      = '10.0.26100.0'
+$script:ApcKitVersion  = '10.0.28000.2526'
+$script:ApcKitBin      = '10.0.28000.0'
 $script:ApcCableCountMin     = 1
 $script:ApcCableCountMax     = 16
 $script:ApcCableCountDefault = 8

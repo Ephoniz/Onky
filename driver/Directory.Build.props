@@ -6,7 +6,7 @@
 -->
 <Project>
   <PropertyGroup>
-    <AudioProgramKitVersion>10.0.26100.6584</AudioProgramKitVersion>
+    <AudioProgramKitVersion>10.0.28000.2526</AudioProgramKitVersion>
     <AudioProgramPackages>$(MSBuildThisFileDirectory)packages</AudioProgramPackages>
   </PropertyGroup>
   <Import Project="$(AudioProgramPackages)\Microsoft.Windows.WDK.x64.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.WDK.x64.props" Condition="Exists('$(AudioProgramPackages)\Microsoft.Windows.WDK.x64.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.WDK.x64.props')" />

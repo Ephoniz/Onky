@@ -29,7 +29,7 @@ gain or format conversion; the Audio Program app does that in user mode.
 | `tests/` | Host unit tests (C++) and Pester tests for the scripts. |
 | `AudioProgramCable.inx` | INF template; StampInf turns it into `AudioProgramCable.inf`. |
 | `AudioProgramCable.vcxproj` | WDK project (WDM driver, `WindowsKernelModeDriver10.0`). |
-| `packages.config`, `Directory.Build.props` | Pinned Windows SDK/WDK from NuGet (10.0.26100.6584). |
+| `packages.config`, `Directory.Build.props` | Pinned Windows SDK/WDK from NuGet (10.0.28000.2526). |
 | `build.ps1` | Builds, packages and optionally test-signs the driver. |
 | `scripts/` | Test certificate, signing, test mode, install/uninstall, cable count, status. |
 | `smoke-test/sonicanvas/` | Builds an independent driver to check the test PC setup. |
@@ -57,7 +57,7 @@ Changing the cable count takes effect when the device restarts
 
 ## Build
 
-On Windows with Visual Studio 2022 ("Desktop development with C++"), from a
+On Windows with Visual Studio 2026 ("Desktop development with C++"), from a
 PowerShell prompt:
 
 ```powershell
@@ -66,7 +66,8 @@ cd driver
 ```
 
 `-RestorePackages` downloads the pinned SDK and WDK from NuGet, so no WDK
-install is needed. The package lands in `driver\build\package`:
+install is needed. The pinned WDK only works with Visual Studio 2026 (MSBuild 18).
+The package lands in `driver\build\package`:
 `AudioProgramCable.sys`, `.inf`, `.cat`, the test certificate
 `AudioProgramCableTest.cer`, the scripts and `TESTING.md`.
 

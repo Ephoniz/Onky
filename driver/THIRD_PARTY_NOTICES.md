@@ -37,6 +37,6 @@ to produce a separate test package, which includes Sonicanvas's own
 
 ## Microsoft Windows SDK and WDK
 
-The build downloads the Windows SDK and WDK NuGet packages (10.0.26100.6584)
+The build downloads the Windows SDK and WDK NuGet packages (10.0.28000.2526)
 under Microsoft's licence terms. They are build tools only and are not
 redistributed in the driver package.
