@@ -13,3 +13,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - WASAPI shared-mode hardware listing on Windows. Virtual cables are left to the kernel driver in `driver/`.
 - Mixer window and a `--headless` session.
 - Allocation check for the mix callback, and a release-mode CPU budget test.
+- Agent rules in `AGENTS.md`. Test changes require the owner's review.

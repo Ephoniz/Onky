@@ -1,6 +1,6 @@
 # Contributing
 
-Audio Program is MIT licensed. Issues and pull requests are welcome.
+Audio Program is MIT licensed. Issues and pull requests are welcome. Agents working in this repo follow [AGENTS.md](AGENTS.md).
 
 ## Branches and reviews
 
