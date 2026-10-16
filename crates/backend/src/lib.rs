@@ -1,13 +1,18 @@
 //! Virtual-cable backend interface.
 //!
-//! Linux creates the cables with PipeWire. Windows opens hardware with WASAPI
-//! shared mode and refuses to invent cables: those come from the driver in `driver/`.
+//! Linux creates the cables with PipeWire. Windows streams existing endpoints with
+//! WASAPI shared mode and refuses to invent cables: those come from the driver in `driver/`.
 
 use std::sync::Arc;
 
 use audio_program_engine::Shared;
 
+mod device_io;
 mod error;
+pub use device_io::{
+    device_error_text, fill_render, mix_ahead, push_capture, stream_rate, DEVICE_CHANNELS,
+    MAX_DEVICE_RATE,
+};
 pub use error::BackendError;
 
 /// Returned when Windows is asked to create a virtual cable.
