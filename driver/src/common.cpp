@@ -31,11 +31,6 @@ Abstract:
 // Per-cable endpoint templates. Runtime copies get unique reference strings,
 // a cable index and a friendly name.
 //=============================================================================
-#define CABLE_TEMPLATE_RENDER_WAVE      L"WaveCableRender"
-#define CABLE_TEMPLATE_RENDER_TOPO      L"TopologyCableRender"
-#define CABLE_TEMPLATE_CAPTURE_WAVE     L"WaveCableCapture"
-#define CABLE_TEMPLATE_CAPTURE_TOPO     L"TopologyCableCapture"
-#define CABLE_FRIENDLY_NAME_FORMAT      L"Audio Program Cable %u"
 
 static
 const ENDPOINT_MINIPAIR CableRenderMiniportsTemplate =
@@ -368,51 +363,38 @@ Routine Description:
 {
     PAGED_CODE();
 
-    ULONG           cableCount = CABLE_COUNT_DEFAULT;
     HANDLE          driverKey = NULL;
     UNICODE_STRING  valueName;
     UCHAR           buffer[sizeof(KEY_VALUE_PARTIAL_INFORMATION) + sizeof(ULONG)] = { 0 };
     ULONG           resultLength = 0;
+    bool            hasValue = false;
+    ULONG           value = 0;
 
     NTSTATUS ntStatus = IoOpenDriverRegistryKey(g_DriverObject,
                                                 DriverRegKeyParameters,
                                                 KEY_READ,
                                                 0,
                                                 &driverKey);
-    if (!NT_SUCCESS(ntStatus))
-    {
-        DPF(D_TERSE, ("CableCount: no Parameters key (0x%x), using %u", ntStatus, cableCount));
-        return cableCount;
-    }
-
-    RtlInitUnicodeString(&valueName, CABLE_COUNT_VALUE_NAME);
-
-    ntStatus = ZwQueryValueKey(driverKey,
-                               &valueName,
-                               KeyValuePartialInformation,
-                               buffer,
-                               sizeof(buffer),
-                               &resultLength);
     if (NT_SUCCESS(ntStatus))
     {
+        RtlInitUnicodeString(&valueName, CABLE_COUNT_VALUE_NAME);
+        ntStatus = ZwQueryValueKey(driverKey,
+                                   &valueName,
+                                   KeyValuePartialInformation,
+                                   buffer,
+                                   sizeof(buffer),
+                                   &resultLength);
+        ZwClose(driverKey);
+
         PKEY_VALUE_PARTIAL_INFORMATION info = (PKEY_VALUE_PARTIAL_INFORMATION)buffer;
-        if (info->Type == REG_DWORD && info->DataLength == sizeof(ULONG))
+        if (NT_SUCCESS(ntStatus) && info->Type == REG_DWORD && info->DataLength == sizeof(ULONG))
         {
-            cableCount = *(ULONG UNALIGNED *)info->Data;
+            hasValue = true;
+            value = *(ULONG UNALIGNED *)info->Data;
         }
     }
 
-    ZwClose(driverKey);
-
-    if (cableCount < CABLE_COUNT_MIN)
-    {
-        cableCount = CABLE_COUNT_MIN;
-    }
-    else if (cableCount > CABLE_COUNT_MAX)
-    {
-        cableCount = CABLE_COUNT_MAX;
-    }
-
+    ULONG cableCount = CableCountFromSetting(hasValue, value);
     DPF(D_TERSE, ("CableCount: %u", cableCount));
     return cableCount;
 }

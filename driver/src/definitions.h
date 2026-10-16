@@ -26,6 +26,7 @@ Abstract:
 #include <ntintsafe.h>
 #include <ntstrsafe.h>
 #include "newdelete.h"
+#include "cable_config.h"
 
 //=============================================================================
 // Defines
@@ -45,16 +46,6 @@ Abstract:
 #define D_ERROR                     DEBUGLVL_ERROR
 #define DPF                         _DbgPrintF
 #define DPF_ENTER(x)                DPF(D_FUNC, x)
-
-//
-// Cable configuration. The count is read from
-// HKLM\SYSTEM\CurrentControlSet\Services\AudioProgramCable\Parameters\CableCount
-// when the device starts.
-//
-#define CABLE_COUNT_VALUE_NAME      L"CableCount"
-#define CABLE_COUNT_DEFAULT         8
-#define CABLE_COUNT_MIN             1
-#define CABLE_COUNT_MAX             16
 
 //
 // Every cable endpoint uses exactly one format, so the loopback is a byte copy:
