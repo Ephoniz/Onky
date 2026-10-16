@@ -168,20 +168,15 @@ class CAdapterCommon :
 
     NTSTATUS InstallSubdevice
     (
-        _In_opt_        PIRP                                        Irp,
-        _In_            PWSTR                                       Name,
-        _In_opt_        PCWSTR                                      TemplateName,
-        _In_opt_        PCWSTR                                      FriendlyName,
-        _In_            REFGUID                                     PortClassId,
-        _In_            REFGUID                                     MiniportClassId,
-        _In_opt_        PFNCREATEMINIPORT                           MiniportCreate,
-        _In_opt_        PVOID                                       DeviceContext,
-        _In_            PENDPOINT_MINIPAIR                          MiniportPair,
-        _In_opt_        PRESOURCELIST                               ResourceList,
-        _In_            REFGUID                                     PortInterfaceId,
-        _Out_opt_       PUNKNOWN                                  * OutPortInterface,
-        _Out_opt_       PUNKNOWN                                  * OutPortUnknown,
-        _Out_opt_       PUNKNOWN                                  * OutMiniportUnknown
+        _In_opt_    PIRP                Irp,
+        _In_        PWSTR               Name,
+        _In_        PCWSTR              TemplateName,
+        _In_        PCWSTR              FriendlyName,
+        _In_        REFGUID             PortClassId,
+        _In_        PFNCREATEMINIPORT   MiniportCreate,
+        _In_        PENDPOINT_MINIPAIR  MiniportPair,
+        _Out_       PUNKNOWN          * OutPortUnknown,
+        _Out_       PUNKNOWN          * OutMiniportUnknown
     );
 
     NTSTATUS UnregisterSubdevice
@@ -209,13 +204,6 @@ class CAdapterCommon :
     (
         _In_opt_    PIRP                Irp,
         _In_        PENDPOINT_MINIPAIR  MiniportPair
-    );
-
-    NTSTATUS GetCachedSubdevice
-    (
-        _In_ PWSTR Name,
-        _Out_opt_ PUNKNOWN *OutUnknownPort,
-        _Out_opt_ PUNKNOWN *OutUnknownMiniport
     );
 
     NTSTATUS CacheSubdevice
@@ -857,30 +845,25 @@ Done:
 NTSTATUS
 CAdapterCommon::InstallSubdevice
 (
-    _In_opt_        PIRP                                    Irp,
-    _In_            PWSTR                                   Name,
-    _In_opt_        PCWSTR                                  TemplateName,
-    _In_opt_        PCWSTR                                  FriendlyName,
-    _In_            REFGUID                                 PortClassId,
-    _In_            REFGUID                                 MiniportClassId,
-    _In_opt_        PFNCREATEMINIPORT                       MiniportCreate,
-    _In_opt_        PVOID                                   DeviceContext,
-    _In_            PENDPOINT_MINIPAIR                      MiniportPair,
-    _In_opt_        PRESOURCELIST                           ResourceList,
-    _In_            REFGUID                                 PortInterfaceId,
-    _Out_opt_       PUNKNOWN                              * OutPortInterface,
-    _Out_opt_       PUNKNOWN                              * OutPortUnknown,
-    _Out_opt_       PUNKNOWN                              * OutMiniportUnknown
+    _In_opt_    PIRP                Irp,
+    _In_        PWSTR               Name,
+    _In_        PCWSTR              TemplateName,
+    _In_        PCWSTR              FriendlyName,
+    _In_        REFGUID             PortClassId,
+    _In_        PFNCREATEMINIPORT   MiniportCreate,
+    _In_        PENDPOINT_MINIPAIR  MiniportPair,
+    _Out_       PUNKNOWN          * OutPortUnknown,
+    _Out_       PUNKNOWN          * OutMiniportUnknown
 )
-{
 /*++
 
 Routine Description:
 
-    This function creates and registers a subdevice consisting of a port
-    driver, a minport driver and a set of resources bound together.
+    Creates the audio interface, port and miniport for one filter and
+    registers them as a PortCls subdevice.
 
 --*/
+{
     PAGED_CODE();
     DPF_ENTER(("[InstallSubDevice %S]", Name));
 
@@ -890,131 +873,50 @@ Routine Description:
     NTSTATUS                    ntStatus;
     PPORT                       port            = NULL;
     PUNKNOWN                    miniport        = NULL;
-    PADAPTERCOMMON              adapterCommon   = NULL;
+    PADAPTERCOMMON              adapterCommon   = PADAPTERCOMMON(this);
     UNICODE_STRING              symbolicLink    = { 0 };
 
-    adapterCommon = PADAPTERCOMMON(this);
+    *OutPortUnknown = NULL;
+    *OutMiniportUnknown = NULL;
 
     ntStatus = CreateAudioInterface(Name, TemplateName, FriendlyName, &symbolicLink);
     if (NT_SUCCESS(ntStatus))
     {
-        // Currently have no use for the symbolic link
         RtlFreeUnicodeString(&symbolicLink);
-
-        // Create the port driver object
-        //
         ntStatus = PcNewPort(&port, PortClassId);
     }
 
-    // Create the miniport object
-    //
     if (NT_SUCCESS(ntStatus))
     {
-        if (MiniportCreate)
-        {
-            ntStatus =
-                MiniportCreate
-                (
-                    &miniport,
-                    MiniportClassId,
-                    NULL,
-                    POOL_FLAG_NON_PAGED,
-                    adapterCommon,
-                    DeviceContext,
-                    MiniportPair
-                );
-        }
-        else
-        {
-            ntStatus =
-                PcNewMiniport
-                (
-                    (PMINIPORT *) &miniport,
-                    MiniportClassId
-                );
-        }
+        ntStatus = MiniportCreate(&miniport, PortClassId, NULL, POOL_FLAG_NON_PAGED, adapterCommon, NULL, MiniportPair);
     }
 
-    // Init the port driver and miniport in one go.
-    //
     if (NT_SUCCESS(ntStatus))
     {
 #pragma warning(push)
-        // IPort::Init's annotation on ResourceList requires it to be non-NULL.  However,
-        // for dynamic devices, we may no longer have the resource list and this should
-        // still succeed.
-        //
+        // IPort::Init's annotation requires a resource list; a virtual device has none.
 #pragma warning(disable:6387)
-        ntStatus =
-            port->Init
-            (
-                m_pDeviceObject,
-                Irp,
-                miniport,
-                adapterCommon,
-                ResourceList
-            );
+        ntStatus = port->Init(m_pDeviceObject, Irp, miniport, adapterCommon, NULL);
 #pragma warning (pop)
-
-        if (NT_SUCCESS(ntStatus))
-        {
-            // Register the subdevice (port/miniport combination).
-            //
-            ntStatus =
-                PcRegisterSubdevice
-                (
-                    m_pDeviceObject,
-                    Name,
-                    port
-                );
-        }
     }
 
-    // Deposit the port interfaces if it's needed.
-    //
     if (NT_SUCCESS(ntStatus))
     {
-        if (OutPortUnknown)
-        {
-            ntStatus =
-                port->QueryInterface
-                (
-                    IID_IUnknown,
-                    (PVOID *)OutPortUnknown
-                );
-        }
-
-        if (OutPortInterface)
-        {
-            ntStatus =
-                port->QueryInterface
-                (
-                    PortInterfaceId,
-                    (PVOID *) OutPortInterface
-                );
-        }
-
-        if (OutMiniportUnknown)
-        {
-            ntStatus =
-                miniport->QueryInterface
-                (
-                    IID_IUnknown,
-                    (PVOID *)OutMiniportUnknown
-                );
-        }
-
+        ntStatus = PcRegisterSubdevice(m_pDeviceObject, Name, port);
     }
 
-    if (port)
+    if (NT_SUCCESS(ntStatus))
     {
-        port->Release();
+        ntStatus = port->QueryInterface(IID_IUnknown, (PVOID *)OutPortUnknown);
     }
 
-    if (miniport)
+    if (NT_SUCCESS(ntStatus))
     {
-        miniport->Release();
+        ntStatus = miniport->QueryInterface(IID_IUnknown, (PVOID *)OutMiniportUnknown);
     }
+
+    SAFE_RELEASE(port);
+    SAFE_RELEASE(miniport);
 
     return ntStatus;
 } // InstallSubDevice
@@ -1241,48 +1143,6 @@ Routine Description:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS
-CAdapterCommon::GetCachedSubdevice
-(
-    _In_ PWSTR Name,
-    _Out_opt_ PUNKNOWN *OutUnknownPort,
-    _Out_opt_ PUNKNOWN *OutUnknownMiniport
-)
-{
-    PAGED_CODE();
-    DPF_ENTER(("[CAdapterCommon::GetCachedSubdevice]"));
-
-    // search list, return interface to device if found, fail if not found
-    PLIST_ENTRY le = NULL;
-    BOOL bFound = FALSE;
-
-    for (le = m_SubdeviceCache.Flink; le != &m_SubdeviceCache && !bFound; le = le->Flink)
-    {
-        MINIPAIR_UNKNOWN *pRecord = CONTAINING_RECORD(le, MINIPAIR_UNKNOWN, ListEntry);
-
-        if (0 == wcscmp(Name, pRecord->Name))
-        {
-            if (OutUnknownPort)
-            {
-                *OutUnknownPort = pRecord->PortInterface;
-                (*OutUnknownPort)->AddRef();
-            }
-
-            if (OutUnknownMiniport)
-            {
-                *OutUnknownMiniport = pRecord->MiniportInterface;
-                (*OutUnknownMiniport)->AddRef();
-            }
-
-            bFound = TRUE;
-        }
-    }
-
-    return bFound?STATUS_SUCCESS:STATUS_OBJECT_NAME_NOT_FOUND;
-}
-
-//=============================================================================
-#pragma code_seg("PAGE")
-NTSTATUS
 CAdapterCommon::CacheSubdevice
 (
     _In_ PWSTR Name,
@@ -1427,74 +1287,43 @@ CAdapterCommon::InstallEndpointFilters
     PAGED_CODE();
     DPF_ENTER(("[CAdapterCommon::InstallEndpointFilters]"));
 
-    NTSTATUS            ntStatus            = STATUS_SUCCESS;
+    NTSTATUS            ntStatus;
     PUNKNOWN            unknownTopology     = NULL;
     PUNKNOWN            unknownWave         = NULL;
-    BOOL                bTopologyCreated    = FALSE;
-    BOOL                bWaveCreated        = FALSE;
     PUNKNOWN            unknownMiniTopo     = NULL;
     PUNKNOWN            unknownMiniWave     = NULL;
 
-    ntStatus = GetCachedSubdevice(MiniportPair->TopoName, &unknownTopology, &unknownMiniTopo);
-    if (!NT_SUCCESS(ntStatus) || NULL == unknownTopology || NULL == unknownMiniTopo)
+    ntStatus = InstallSubdevice(Irp,
+                                MiniportPair->TopoName,
+                                MiniportPair->TemplateTopoName,
+                                MiniportPair->FriendlyName,
+                                CLSID_PortTopology,
+                                MiniportPair->TopoCreateCallback,
+                                MiniportPair,
+                                &unknownTopology,
+                                &unknownMiniTopo);
+    if (NT_SUCCESS(ntStatus))
     {
-        bTopologyCreated = TRUE;
-
-        ntStatus = InstallSubdevice(Irp,
-                                    MiniportPair->TopoName,
-                                    MiniportPair->TemplateTopoName,
-                                    MiniportPair->FriendlyName,
-                                    CLSID_PortTopology,
-                                    CLSID_PortTopology,
-                                    MiniportPair->TopoCreateCallback,
-                                    NULL,
-                                    MiniportPair,
-                                    NULL,
-                                    IID_IPortTopology,
-                                    NULL,
-                                    &unknownTopology,
-                                    &unknownMiniTopo
-                                    );
-        if (NT_SUCCESS(ntStatus))
-        {
-            ntStatus = CacheSubdevice(MiniportPair->TopoName, unknownTopology, unknownMiniTopo);
-        }
+        ntStatus = CacheSubdevice(MiniportPair->TopoName, unknownTopology, unknownMiniTopo);
     }
     IF_FAILED_JUMP(ntStatus, Done);
 
-    ntStatus = GetCachedSubdevice(MiniportPair->WaveName, &unknownWave, &unknownMiniWave);
-    if (!NT_SUCCESS(ntStatus) || NULL == unknownWave || NULL == unknownMiniWave)
+    ntStatus = InstallSubdevice(Irp,
+                                MiniportPair->WaveName,
+                                MiniportPair->TemplateWaveName,
+                                MiniportPair->FriendlyName,
+                                CLSID_PortWaveRT,
+                                MiniportPair->WaveCreateCallback,
+                                MiniportPair,
+                                &unknownWave,
+                                &unknownMiniWave);
+    if (NT_SUCCESS(ntStatus))
     {
-        bWaveCreated = TRUE;
-
-        ntStatus = InstallSubdevice(Irp,
-                                    MiniportPair->WaveName,
-                                    MiniportPair->TemplateWaveName,
-                                    MiniportPair->FriendlyName,
-                                    CLSID_PortWaveRT,
-                                    CLSID_PortWaveRT,
-                                    MiniportPair->WaveCreateCallback,
-                                    NULL,
-                                    MiniportPair,
-                                    NULL,
-                                    IID_IPortWaveRT,
-                                    NULL,
-                                    &unknownWave,
-                                    &unknownMiniWave
-                                    );
-
-        if (NT_SUCCESS(ntStatus))
-        {
-            ntStatus = CacheSubdevice(MiniportPair->WaveName, unknownWave, unknownMiniWave);
-        }
+        ntStatus = CacheSubdevice(MiniportPair->WaveName, unknownWave, unknownMiniWave);
     }
     IF_FAILED_JUMP(ntStatus, Done);
 
-    //
-    // register wave <=> topology connections
-    // This will connect bridge pins of wave and topology
-    // miniports.
-    //
+    // Connect the bridge pins of the wave and topology filters.
     ntStatus = ConnectTopologies(
         unknownTopology,
         unknownWave,
@@ -1504,13 +1333,13 @@ CAdapterCommon::InstallEndpointFilters
 Done:
     if (!NT_SUCCESS(ntStatus))
     {
-        if (bTopologyCreated && unknownTopology != NULL)
+        if (unknownTopology != NULL)
         {
             UnregisterSubdevice(unknownTopology);
             RemoveCachedSubdevice(MiniportPair->TopoName);
         }
 
-        if (bWaveCreated && unknownWave != NULL)
+        if (unknownWave != NULL)
         {
             UnregisterSubdevice(unknownWave);
             RemoveCachedSubdevice(MiniportPair->WaveName);
