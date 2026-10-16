@@ -1009,13 +1009,11 @@ VOID CMiniportWaveRTStream::UpdatePosition
 
     if (m_bCapture)
     {
-        // Fill the WaveRT buffer from the cable.
-        WriteBytes(ByteDisplacement);
+        m_pCable->ReadToBuffer(m_pDmaBuffer, m_ulDmaBufferSize, m_ullLinearPosition, ByteDisplacement);
     }
     else
     {
-        // Move what the client rendered into the cable.
-        ReadBytes(ByteDisplacement);
+        m_pCable->WriteFromBuffer(m_pDmaBuffer, m_ulDmaBufferSize, m_ullLinearPosition, ByteDisplacement);
     }
 
     // Increment the DMA position by the number of bytes displaced since the last
@@ -1029,82 +1027,6 @@ VOID CMiniportWaveRTStream::UpdatePosition
     // Update the DMA time stamp for the next call to GetPosition()
     //
     m_ullDmaTimeStamp = hnsCurrentTime;
-}
-
-//=============================================================================
-#pragma code_seg()
-VOID CMiniportWaveRTStream::WriteBytes
-(
-    _In_ ULONG ByteDisplacement
-)
-/*++
-
-Routine Description:
-
-  Capture: copies ByteDisplacement bytes from the cable into the WaveRT
-  buffer at the current position. The cable returns silence when the render
-  side is not playing.
-
---*/
-{
-    ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
-
-    if (ByteDisplacement > m_ulDmaBufferSize)
-    {
-        // Only the last buffer's worth can still be read by the client.
-        ULONG skipped = ByteDisplacement - m_ulDmaBufferSize;
-        m_pCable->ResetReader();
-        bufferOffset = (ULONG)((bufferOffset + (ULONGLONG)skipped) % m_ulDmaBufferSize);
-        ByteDisplacement = m_ulDmaBufferSize;
-    }
-
-    while (ByteDisplacement > 0)
-    {
-        ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-
-        m_pCable->Read(m_pDmaBuffer + bufferOffset, runWrite);
-
-        bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
-        ByteDisplacement -= runWrite;
-    }
-}
-
-//=============================================================================
-#pragma code_seg()
-VOID CMiniportWaveRTStream::ReadBytes
-(
-    _In_ ULONG ByteDisplacement
-)
-/*++
-
-Routine Description:
-
-  Render: copies ByteDisplacement bytes from the WaveRT buffer at the current
-  position into the cable, unchanged.
-
---*/
-{
-    ULONG bufferOffset = m_ullLinearPosition % m_ulDmaBufferSize;
-
-    if (ByteDisplacement > m_ulDmaBufferSize)
-    {
-        // The client could not have filled more than one buffer; keep the
-        // cable's timing by writing silence for the rest.
-        ULONG skipped = ByteDisplacement - m_ulDmaBufferSize;
-        m_pCable->Write(NULL, skipped);
-        bufferOffset = (ULONG)((bufferOffset + (ULONGLONG)skipped) % m_ulDmaBufferSize);
-        ByteDisplacement = m_ulDmaBufferSize;
-    }
-
-    while (ByteDisplacement > 0)
-    {
-        ULONG runWrite = min(ByteDisplacement, m_ulDmaBufferSize - bufferOffset);
-
-        m_pCable->Write(m_pDmaBuffer + bufferOffset, runWrite);
-
-        bufferOffset = (bufferOffset + runWrite) % m_ulDmaBufferSize;
-        ByteDisplacement -= runWrite;
-    }
 }
 
 //=============================================================================
@@ -1184,4 +1106,3 @@ End:
     KeReleaseSpinLock(&_this->m_PositionSpinLock, oldIrql);
     return;
 }
-//=============================================================================

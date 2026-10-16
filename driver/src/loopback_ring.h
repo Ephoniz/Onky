@@ -206,4 +206,79 @@ inline void LoopbackRingRead(LOOPBACK_RING * Ring, unsigned char * Destination, 
     }
 }
 
+// Render: copies Bytes of a circular client buffer, starting at the linear
+// byte Position, into the ring. Only the last BufferSize bytes can still be
+// in the buffer, so any excess is written as silence first to keep timing.
+inline void LoopbackRingWriteFromCircular
+(
+    LOOPBACK_RING *         Ring,
+    const unsigned char *   Buffer,
+    unsigned int            BufferSize,
+    unsigned long long      Position,
+    unsigned int            Bytes
+)
+{
+    if (BufferSize == 0)
+    {
+        return;
+    }
+    if (Bytes > BufferSize)
+    {
+        unsigned int skipped = Bytes - BufferSize;
+        LoopbackRingWrite(Ring, nullptr, skipped);
+        Position += skipped;
+        Bytes = BufferSize;
+    }
+
+    unsigned int offset = (unsigned int)(Position % BufferSize);
+    while (Bytes > 0)
+    {
+        unsigned int run = BufferSize - offset;
+        if (run > Bytes)
+        {
+            run = Bytes;
+        }
+        LoopbackRingWrite(Ring, Buffer + offset, run);
+        offset = (offset + run) % BufferSize;
+        Bytes -= run;
+    }
+}
+
+// Capture: fills Bytes of a circular client buffer, starting at the linear
+// byte Position, from the ring. If Bytes exceeds the buffer, the reader
+// restarts and only the last BufferSize bytes are filled.
+inline void LoopbackRingReadToCircular
+(
+    LOOPBACK_RING *         Ring,
+    unsigned char *         Buffer,
+    unsigned int            BufferSize,
+    unsigned long long      Position,
+    unsigned int            Bytes
+)
+{
+    if (BufferSize == 0)
+    {
+        return;
+    }
+    if (Bytes > BufferSize)
+    {
+        LoopbackRingResetReader(Ring);
+        Position += Bytes - BufferSize;
+        Bytes = BufferSize;
+    }
+
+    unsigned int offset = (unsigned int)(Position % BufferSize);
+    while (Bytes > 0)
+    {
+        unsigned int run = BufferSize - offset;
+        if (run > Bytes)
+        {
+            run = Bytes;
+        }
+        LoopbackRingRead(Ring, Buffer + offset, run);
+        offset = (offset + run) % BufferSize;
+        Bytes -= run;
+    }
+}
+
 #endif // AUDIO_PROGRAM_LOOPBACK_RING_H_

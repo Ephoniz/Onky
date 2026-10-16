@@ -124,16 +124,6 @@ private:
 
 #pragma code_seg()
 
-    VOID WriteBytes
-    (
-        _In_ ULONG ByteDisplacement
-    );
-
-    VOID ReadBytes
-    (
-        _In_ ULONG ByteDisplacement
-    );
-
     VOID UpdatePosition
     (
         _In_ LARGE_INTEGER ilQPC

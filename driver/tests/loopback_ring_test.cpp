@@ -302,6 +302,110 @@ void TestUninitializedRingIsSilent()
     CHECK(AllZero(out));
 }
 
+// A small ring with no priming, so reads return exactly what was written.
+constexpr unsigned int kClientFrames = 16;
+constexpr unsigned int kClientBytes = kClientFrames * kFrame;
+
+Fixture DirectFixture()
+{
+    return Fixture(64 * kFrame, 0, 64 * kFrame);
+}
+
+std::vector<unsigned char> ReadFrames(LOOPBACK_RING * ring, unsigned int frameCount)
+{
+    std::vector<unsigned char> out(frameCount * kFrame);
+    LoopbackRingRead(ring, out.data(), (unsigned int)out.size());
+    return out;
+}
+
+void TestWriteFromCircularWraps()
+{
+    Fixture f = DirectFixture();
+    auto client = Frames(0, kClientFrames);
+
+    LoopbackRingWriteFromCircular(&f.ring, client.data(), kClientBytes, 3 * kClientBytes + 12 * kFrame, 8 * kFrame);
+
+    auto out = ReadFrames(&f.ring, 8);
+    CHECK(FrameValue(out, 0) == 13);
+    CHECK(FrameValue(out, 3) == 16);
+    CHECK(FrameValue(out, 4) == 1);
+    CHECK(FrameValue(out, 7) == 4);
+}
+
+void TestWriteFromCircularPadsExcessWithSilence()
+{
+    Fixture f = DirectFixture();
+    auto client = Frames(0, kClientFrames);
+
+    LoopbackRingWriteFromCircular(&f.ring, client.data(), kClientBytes, 0, kClientBytes + 4 * kFrame);
+
+    CHECK(f.ring.Fill == kClientBytes + 4 * kFrame);
+    auto out = ReadFrames(&f.ring, kClientFrames + 4);
+    for (unsigned int i = 0; i < 4; ++i)
+    {
+        CHECK(FrameValue(out, i) == 0);
+    }
+    CHECK(FrameValue(out, 4) == 5);
+    CHECK(FrameValue(out, 15) == 16);
+    CHECK(FrameValue(out, 16) == 1);
+    CHECK(FrameValue(out, 19) == 4);
+}
+
+void TestWriteFromCircularUses64BitPosition()
+{
+    Fixture f = DirectFixture();
+    auto client = Frames(0, kClientFrames);
+
+    LoopbackRingWriteFromCircular(&f.ring, client.data(), kClientBytes, (1ull << 33) + 3 * kFrame, 2 * kFrame);
+
+    auto out = ReadFrames(&f.ring, 2);
+    CHECK(FrameValue(out, 0) == 4);
+    CHECK(FrameValue(out, 1) == 5);
+}
+
+void TestReadToCircularWraps()
+{
+    Fixture f = DirectFixture();
+    auto in = Frames(0, 8);
+    LoopbackRingWrite(&f.ring, in.data(), (unsigned int)in.size());
+    std::vector<unsigned char> client(kClientBytes, 0xAA);
+
+    LoopbackRingReadToCircular(&f.ring, client.data(), kClientBytes, 12 * kFrame, 8 * kFrame);
+
+    CHECK(FrameValue(client, 12) == 1);
+    CHECK(FrameValue(client, 15) == 4);
+    CHECK(FrameValue(client, 0) == 5);
+    CHECK(FrameValue(client, 3) == 8);
+    CHECK(client[4 * kFrame] == 0xAA);
+    CHECK(client[12 * kFrame - 1] == 0xAA);
+    CHECK(f.ring.Fill == 0);
+}
+
+void TestReadToCircularExcessDropsStaleAudio()
+{
+    Fixture f = DirectFixture();
+    auto stale = Frames(0, 8);
+    LoopbackRingWrite(&f.ring, stale.data(), (unsigned int)stale.size());
+    std::vector<unsigned char> client(kClientBytes, 0xAA);
+
+    LoopbackRingReadToCircular(&f.ring, client.data(), kClientBytes, 0, kClientBytes + 4 * kFrame);
+
+    CHECK(AllZero(client));
+    CHECK(f.ring.Fill == 0);
+}
+
+void TestCircularCopiesIgnoreEmptyBuffer()
+{
+    Fixture f = DirectFixture();
+    unsigned char byte = 0xAA;
+
+    LoopbackRingWriteFromCircular(&f.ring, &byte, 0, 0, kFrame);
+    LoopbackRingReadToCircular(&f.ring, &byte, 0, 0, kFrame);
+
+    CHECK(f.ring.Fill == 0);
+    CHECK(byte == 0xAA);
+}
+
 } // namespace
 
 int main()
@@ -318,6 +422,12 @@ int main()
     TestNullSourceWritesSilence();
     TestUnalignedFillIsDiscardedOnUnderrun();
     TestUninitializedRingIsSilent();
+    TestWriteFromCircularWraps();
+    TestWriteFromCircularPadsExcessWithSilence();
+    TestWriteFromCircularUses64BitPosition();
+    TestReadToCircularWraps();
+    TestReadToCircularExcessDropsStaleAudio();
+    TestCircularCopiesIgnoreEmptyBuffer();
 
     if (g_failures != 0)
     {

@@ -54,21 +54,25 @@ public:
         RtlZeroMemory(&m_Ring, sizeof(m_Ring));
     }
 
-    // Render side. Callable at IRQL <= DISPATCH_LEVEL.
-    void Write(_In_reads_bytes_opt_(Bytes) const BYTE * Source, _In_ ULONG Bytes)
+    // Render side: copies from the stream's WaveRT buffer into the cable.
+    // Callable at IRQL <= DISPATCH_LEVEL.
+    void WriteFromBuffer(_In_reads_bytes_(BufferSize) const BYTE * Buffer, _In_ ULONG BufferSize,
+                         _In_ ULONGLONG Position, _In_ ULONG Bytes)
     {
         KIRQL irql;
         KeAcquireSpinLock(&m_Lock, &irql);
-        LoopbackRingWrite(&m_Ring, Source, Bytes);
+        LoopbackRingWriteFromCircular(&m_Ring, Buffer, BufferSize, Position, Bytes);
         KeReleaseSpinLock(&m_Lock, irql);
     }
 
-    // Capture side. Always fills Bytes. Callable at IRQL <= DISPATCH_LEVEL.
-    void Read(_Out_writes_bytes_(Bytes) BYTE * Destination, _In_ ULONG Bytes)
+    // Capture side: fills the stream's WaveRT buffer from the cable, with
+    // silence when nothing is playing. Callable at IRQL <= DISPATCH_LEVEL.
+    void ReadToBuffer(_Out_writes_bytes_(BufferSize) BYTE * Buffer, _In_ ULONG BufferSize,
+                      _In_ ULONGLONG Position, _In_ ULONG Bytes)
     {
         KIRQL irql;
         KeAcquireSpinLock(&m_Lock, &irql);
-        LoopbackRingRead(&m_Ring, Destination, Bytes);
+        LoopbackRingReadToCircular(&m_Ring, Buffer, BufferSize, Position, Bytes);
         KeReleaseSpinLock(&m_Lock, irql);
     }
 
