@@ -320,8 +320,7 @@ Routine Description:
                     OuterUnknown,
                     Pin,
                     Capture,
-                    DataFormat,
-                    signalProcessingMode
+                    DataFormat
                 );
         }
         else

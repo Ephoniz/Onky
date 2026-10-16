@@ -121,16 +121,6 @@ typedef NTSTATUS (*PFNCREATEMINIPORT)(
     _In_            PENDPOINT_MINIPAIR                      MiniportPair
 );
 
-//=============================================================================
-//
-//=============================================================================
-typedef struct _AUDIOPROGRAMCABLE_DEVPROPERTY {
-    const DEVPROPKEY   *PropertyKey;
-    DEVPROPTYPE Type;
-    ULONG BufferSize;
-    __field_bcount_opt(BufferSize) PVOID Buffer;
-} AUDIOPROGRAMCABLE_DEVPROPERTY, *PAUDIOPROGRAMCABLE_DEVPROPERTY;
-
 //
 // Endpoint miniport pair (wave/topology) descriptor.
 //
@@ -143,18 +133,13 @@ typedef struct _ENDPOINT_MINIPAIR
     PCWSTR                          TemplateTopoName;       // interface template reference string in the INF
     PFNCREATEMINIPORT               TopoCreateCallback;
     PCFILTER_DESCRIPTOR*            TopoDescriptor;
-    ULONG                           TopoInterfacePropertyCount;
-    const AUDIOPROGRAMCABLE_DEVPROPERTY*    TopoInterfaceProperties;
 
     // Wave RT miniport.
     PWSTR                           WaveName;               // runtime reference string, unique per cable
     PCWSTR                          TemplateWaveName;       // interface template reference string in the INF
     PFNCREATEMINIPORT               WaveCreateCallback;
     PCFILTER_DESCRIPTOR*            WaveDescriptor;
-    ULONG                           WaveInterfacePropertyCount;
-    const AUDIOPROGRAMCABLE_DEVPROPERTY*    WaveInterfaceProperties;
 
-    USHORT                          DeviceMaxChannels;
     PIN_DEVICE_FORMATS_AND_MODES*   PinDeviceFormatsAndModes;
     ULONG                           PinDeviceFormatsAndModesCount;
 
@@ -192,27 +177,17 @@ DECLARE_INTERFACE_(IAdapterCommon, IUnknown)
         _In_  PDEVICE_OBJECT      DeviceObject
     ) PURE;
 
-    STDMETHOD_(PDEVICE_OBJECT,  GetDeviceObject)
-    (
-        THIS
-    ) PURE;
 
     STDMETHOD_(PDEVICE_OBJECT,  GetPhysicalDeviceObject)
     (
         THIS
     ) PURE;
 
-    // Creates the per-cable state and registers a render and a capture
-    // endpoint for every configured cable.
+    // Registers a render and a capture endpoint for every cable.
     STDMETHOD_(NTSTATUS,        InstallCables)
     (
         THIS_
         _In_opt_    PIRP                Irp
-    ) PURE;
-
-    STDMETHOD_(ULONG,           GetCableCount)
-    (
-        THIS
     ) PURE;
 
     STDMETHOD_(CLoopbackCable*, GetCable)

@@ -102,8 +102,7 @@ CMiniportWaveRTStream::Init
     _In_ PPORTWAVERTSTREAM          PortStream_,
     _In_ ULONG                      Pin_,
     _In_ BOOLEAN                    Capture_,
-    _In_ PKSDATAFORMAT              DataFormat_,
-    _In_ GUID                       SignalProcessingMode
+    _In_ PKSDATAFORMAT              DataFormat_
 )
 /*++
 
@@ -140,11 +139,8 @@ Routine Description:
     m_pWfExt = NULL;
     m_ullLinearPosition = 0;
     m_ullPresentationPosition = 0;
-    m_ulCurrentWritePosition = 0;
     m_ulLastOsReadPacket = ULONG_MAX;
     m_ulLastOsWritePacket = ULONG_MAX;
-    m_IsCurrentWritePositionUpdated = 0;
-    m_SignalProcessingMode = SignalProcessingMode;
 
     m_pPortStream = PortStream_;
     InitializeListHead(&m_NotificationList);
@@ -844,9 +840,6 @@ NTSTATUS CMiniportWaveRTStream::SetCurrentWritePositionInternal(_In_  ULONG _ulC
         return STATUS_INVALID_DEVICE_REQUEST;
     }
 
-    m_ulCurrentWritePosition = _ulCurrentWritePosition;
-    InterlockedExchange(&m_IsCurrentWritePositionUpdated, 1);
-
     return STATUS_SUCCESS;
 }
 
@@ -876,7 +869,6 @@ NTSTATUS CMiniportWaveRTStream::SetState
 
             // Reset OS read/write positions
             m_ulLastOsReadPacket = ULONG_MAX;
-            m_ulCurrentWritePosition = 0;
             m_ulLastOsWritePacket = ULONG_MAX;
 
             KeReleaseSpinLock(&m_PositionSpinLock, oldIrql);

@@ -14,14 +14,13 @@ class CLoopbackCable
 {
 public:
     // Storage is zeroed by the pool allocator before Initialize is called.
-    NTSTATUS Initialize(_In_ ULONG CableIndex)
+    NTSTATUS Initialize()
     {
         PAGED_CODE();
 
         const ULONG capacity = CABLE_RING_MS * CABLE_BYTES_PER_MS;
 
         KeInitializeSpinLock(&m_Lock);
-        m_CableIndex = CableIndex;
         m_Buffer = (unsigned char *)ExAllocatePool2(POOL_FLAG_NON_PAGED, capacity, CABLE_POOLTAG);
         if (m_Buffer == NULL)
         {
@@ -81,16 +80,10 @@ public:
         KeReleaseSpinLock(&m_Lock, irql);
     }
 
-    ULONG GetCableIndex() const
-    {
-        return m_CableIndex;
-    }
-
 private:
     KSPIN_LOCK      m_Lock;
     LOOPBACK_RING   m_Ring;
     unsigned char * m_Buffer;
-    ULONG           m_CableIndex;
 };
 
 #endif // _AUDIOPROGRAMCABLE_LOOPBACK_H_

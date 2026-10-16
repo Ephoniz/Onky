@@ -45,7 +45,6 @@ private:
     KSPIN_LOCK                          m_DeviceFormatsAndModesLock; // To serialize access.
     KIRQL                               m_DeviceFormatsAndModesIrql;
     ULONG                               m_DeviceFormatsAndModesCount;
-    USHORT                              m_DeviceMaxChannels;
 
 protected:
     // Strong reference: the adapter owns the cable ring and the miniport pair.
@@ -100,7 +99,6 @@ public:
         m_ulMaxSystemStreams(0),
         m_DeviceFormatsAndModes(MiniportPair->PinDeviceFormatsAndModes),
         m_DeviceFormatsAndModesCount(MiniportPair->PinDeviceFormatsAndModesCount),
-        m_DeviceMaxChannels(MiniportPair->DeviceMaxChannels),
         m_pAdapterCommon(NULL),
         m_pCable(NULL),
         m_DeviceType(MiniportPair->DeviceType),

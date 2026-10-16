@@ -45,13 +45,10 @@ const ENDPOINT_MINIPAIR CableRenderMiniportsTemplate =
     CABLE_TEMPLATE_RENDER_TOPO,
     CreateMiniportTopologyCable,
     &CableRenderTopoMiniportFilterDescriptor,
-    0, NULL,                                    // Interface properties
     NULL,                                       // WaveName, set per cable
     CABLE_TEMPLATE_RENDER_WAVE,
     CreateMiniportWaveRTCable,
     &CableRenderWaveMiniportFilterDescriptor,
-    0, NULL,                                    // Interface properties
-    CABLE_CHANNELS,
     CableRenderPinDeviceFormatsAndModes,
     SIZEOF_ARRAY(CableRenderPinDeviceFormatsAndModes),
     CableRenderTopologyPhysicalConnections,
@@ -68,13 +65,10 @@ const ENDPOINT_MINIPAIR CableCaptureMiniportsTemplate =
     CABLE_TEMPLATE_CAPTURE_TOPO,
     CreateMiniportTopologyCable,
     &CableCaptureTopoMiniportFilterDescriptor,
-    0, NULL,
     NULL,
     CABLE_TEMPLATE_CAPTURE_WAVE,
     CreateMiniportWaveRTCable,
     &CableCaptureWaveMiniportFilterDescriptor,
-    0, NULL,
-    CABLE_CHANNELS,
     CableCapturePinDeviceFormatsAndModes,
     SIZEOF_ARRAY(CableCapturePinDeviceFormatsAndModes),
     CableCaptureTopologyPhysicalConnections,
@@ -138,7 +132,6 @@ class CAdapterCommon :
             _In_  PDEVICE_OBJECT  DeviceObject
         );
 
-        STDMETHODIMP_(PDEVICE_OBJECT)   GetDeviceObject(void);
 
         STDMETHODIMP_(PDEVICE_OBJECT)   GetPhysicalDeviceObject(void);
 
@@ -147,7 +140,6 @@ class CAdapterCommon :
             _In_opt_    PIRP                Irp
         );
 
-        STDMETHODIMP_(ULONG)    GetCableCount(void);
 
         STDMETHODIMP_(CLoopbackCable*) GetCable
         (
@@ -183,8 +175,6 @@ class CAdapterCommon :
         _In_            REFGUID                                     PortClassId,
         _In_            REFGUID                                     MiniportClassId,
         _In_opt_        PFNCREATEMINIPORT                           MiniportCreate,
-        _In_            ULONG                                       cPropertyCount,
-        _In_reads_opt_(cPropertyCount) const AUDIOPROGRAMCABLE_DEVPROPERTY * pProperties,
         _In_opt_        PVOID                                       DeviceContext,
         _In_            PENDPOINT_MINIPAIR                          MiniportPair,
         _In_opt_        PRESOURCELIST                               ResourceList,
@@ -242,13 +232,11 @@ class CAdapterCommon :
 
     VOID EmptySubdeviceCache();
 
-    NTSTATUS CreateAudioInterfaceWithProperties
+    NTSTATUS CreateAudioInterface
     (
         _In_ PCWSTR                                                 ReferenceString,
         _In_opt_ PCWSTR                                             TemplateReferenceString,
         _In_opt_ PCWSTR                                             FriendlyName,
-        _In_ ULONG                                                  cPropertyCount,
-        _In_reads_opt_(cPropertyCount) const AUDIOPROGRAMCABLE_DEVPROPERTY *pProperties,
         _Out_ _At_(AudioSymbolicLinkName->Buffer, __drv_allocatesMem(Mem)) PUNICODE_STRING AudioSymbolicLinkName
     );
 
@@ -279,42 +267,6 @@ typedef struct _MINIPAIR_UNKNOWN
 //-----------------------------------------------------------------------------
 // Functions
 //-----------------------------------------------------------------------------
-
-//=============================================================================
-#pragma code_seg("PAGE")
-NTSTATUS AudioProgramCableIoSetDeviceInterfacePropertyDataMultiple
-(
-    _In_ PUNICODE_STRING                                        SymbolicLinkName,
-    _In_ ULONG                                                  cPropertyCount,
-    _In_reads_opt_(cPropertyCount) const AUDIOPROGRAMCABLE_DEVPROPERTY        *pProperties
-)
-{
-    NTSTATUS ntStatus;
-
-    PAGED_CODE();
-
-    if (pProperties)
-    {
-        for (ULONG i = 0; i < cPropertyCount; i++)
-        {
-            ntStatus = IoSetDeviceInterfacePropertyData(
-                SymbolicLinkName,
-                pProperties[i].PropertyKey,
-                LOCALE_NEUTRAL,
-                PLUGPLAY_PROPERTY_PERSISTENT,
-                pProperties[i].Type,
-                pProperties[i].BufferSize,
-                pProperties[i].Buffer);
-
-            if (!NT_SUCCESS(ntStatus))
-            {
-                return ntStatus;
-            }
-        }
-    }
-
-    return STATUS_SUCCESS;
-}
 
 //=============================================================================
 #pragma code_seg("PAGE")
@@ -399,19 +351,6 @@ CAdapterCommon::FreeCables()
 
     m_CableCount = 0;
 }
-
-//=============================================================================
-#pragma code_seg("PAGE")
-STDMETHODIMP_(PDEVICE_OBJECT)
-CAdapterCommon::GetDeviceObject
-(
-    void
-)
-{
-    PAGED_CODE();
-
-    return m_pDeviceObject;
-} // GetDeviceObject
 
 //=============================================================================
 #pragma code_seg("PAGE")
@@ -565,7 +504,7 @@ Routine Description:
         cable->CapturePair.CableIndex = i;
         cable->CapturePair.FriendlyName = cable->FriendlyName;
 
-        ntStatus = cable->Cable.Initialize(i);
+        ntStatus = cable->Cable.Initialize();
         IF_FAILED_ACTION_JUMP(
             ntStatus,
             DPF(D_ERROR, ("Cable %u ring allocation failed, 0x%x", number, ntStatus)),
@@ -617,16 +556,6 @@ CAdapterCommon::InstallCables
 
 Done:
     return ntStatus;
-}
-
-//=============================================================================
-#pragma code_seg("PAGE")
-STDMETHODIMP_(ULONG)
-CAdapterCommon::GetCableCount(void)
-{
-    PAGED_CODE();
-
-    return m_CableCount;
 }
 
 //=============================================================================
@@ -848,13 +777,11 @@ Exit:
 //=============================================================================
 #pragma code_seg("PAGE")
 NTSTATUS
-CAdapterCommon::CreateAudioInterfaceWithProperties
+CAdapterCommon::CreateAudioInterface
 (
     _In_ PCWSTR ReferenceString,
     _In_opt_ PCWSTR TemplateReferenceString,
     _In_opt_ PCWSTR FriendlyName,
-    _In_ ULONG cPropertyCount,
-    _In_reads_opt_(cPropertyCount) const AUDIOPROGRAMCABLE_DEVPROPERTY *pProperties,
     _Out_ _At_(AudioSymbolicLinkName->Buffer, __drv_allocatesMem(Mem)) PUNICODE_STRING AudioSymbolicLinkName
 )
 /*++
@@ -866,7 +793,7 @@ Create the audio interface (in disabled mode).
 --*/
 {
     PAGED_CODE();
-    DPF_ENTER(("[CAdapterCommon::CreateAudioInterfaceWithProperties]"));
+    DPF_ENTER(("[CAdapterCommon::CreateAudioInterface]"));
 
     NTSTATUS        ntStatus;
     UNICODE_STRING  referenceString;
@@ -889,13 +816,12 @@ Create the audio interface (in disabled mode).
 
     IF_FAILED_ACTION_JUMP(
         ntStatus,
-        DPF(D_ERROR, ("CreateAudioInterfaceWithProperties: IoRegisterDeviceInterface(KSCATEGORY_AUDIO): failed, 0x%x", ntStatus)),
+        DPF(D_ERROR, ("CreateAudioInterface: IoRegisterDeviceInterface(KSCATEGORY_AUDIO): failed, 0x%x", ntStatus)),
         Done);
 
     //
     // Copy the interface parameters (CLSID, endpoint properties) from the
-    // INF template. This is done first, so the friendly name and any
-    // additional properties override the template defaults.
+    // INF template first, so the friendly name overrides the template default.
     //
     if (NULL != TemplateReferenceString)
     {
@@ -903,7 +829,7 @@ Create the audio interface (in disabled mode).
 
         IF_FAILED_ACTION_JUMP(
             ntStatus,
-            DPF(D_ERROR, ("CreateAudioInterfaceWithProperties: MigrateDeviceInterfaceTemplateParameters(...): failed, 0x%x", ntStatus)),
+            DPF(D_ERROR, ("CreateAudioInterface: MigrateDeviceInterfaceTemplateParameters(...): failed, 0x%x", ntStatus)),
             Done);
     }
 
@@ -913,24 +839,9 @@ Create the audio interface (in disabled mode).
 
         IF_FAILED_ACTION_JUMP(
             ntStatus,
-            DPF(D_ERROR, ("CreateAudioInterfaceWithProperties: SetInterfaceFriendlyName(...): failed, 0x%x", ntStatus)),
+            DPF(D_ERROR, ("CreateAudioInterface: SetInterfaceFriendlyName(...): failed, 0x%x", ntStatus)),
             Done);
     }
-
-    //
-    // Set properties on the interface
-    //
-    ntStatus = AudioProgramCableIoSetDeviceInterfacePropertyDataMultiple(AudioSymbolicLinkName, cPropertyCount, pProperties);
-
-    IF_FAILED_ACTION_JUMP(
-        ntStatus,
-        DPF(D_ERROR, ("CreateAudioInterfaceWithProperties: AudioProgramCableIoSetDeviceInterfacePropertyDataMultiple(...): failed, 0x%x", ntStatus)),
-        Done);
-
-    //
-    // All done.
-    //
-    ntStatus = STATUS_SUCCESS;
 
 Done:
     if (!NT_SUCCESS(ntStatus))
@@ -953,8 +864,6 @@ CAdapterCommon::InstallSubdevice
     _In_            REFGUID                                 PortClassId,
     _In_            REFGUID                                 MiniportClassId,
     _In_opt_        PFNCREATEMINIPORT                       MiniportCreate,
-    _In_            ULONG                                   cPropertyCount,
-    _In_reads_opt_(cPropertyCount) const AUDIOPROGRAMCABLE_DEVPROPERTY * pProperties,
     _In_opt_        PVOID                                   DeviceContext,
     _In_            PENDPOINT_MINIPAIR                      MiniportPair,
     _In_opt_        PRESOURCELIST                           ResourceList,
@@ -986,7 +895,7 @@ Routine Description:
 
     adapterCommon = PADAPTERCOMMON(this);
 
-    ntStatus = CreateAudioInterfaceWithProperties(Name, TemplateName, FriendlyName, cPropertyCount, pProperties, &symbolicLink);
+    ntStatus = CreateAudioInterface(Name, TemplateName, FriendlyName, &symbolicLink);
     if (NT_SUCCESS(ntStatus))
     {
         // Currently have no use for the symbolic link
@@ -1538,8 +1447,6 @@ CAdapterCommon::InstallEndpointFilters
                                     CLSID_PortTopology,
                                     CLSID_PortTopology,
                                     MiniportPair->TopoCreateCallback,
-                                    MiniportPair->TopoInterfacePropertyCount,
-                                    MiniportPair->TopoInterfaceProperties,
                                     NULL,
                                     MiniportPair,
                                     NULL,
@@ -1567,8 +1474,6 @@ CAdapterCommon::InstallEndpointFilters
                                     CLSID_PortWaveRT,
                                     CLSID_PortWaveRT,
                                     MiniportPair->WaveCreateCallback,
-                                    MiniportPair->WaveInterfacePropertyCount,
-                                    MiniportPair->WaveInterfaceProperties,
                                     NULL,
                                     MiniportPair,
                                     NULL,

@@ -58,8 +58,6 @@ protected:
     LIST_ENTRY                  m_NotificationList;
     PEX_TIMER                   m_pNotificationTimer;
     ULONG                       m_ulNotificationIntervalMs;
-    ULONG                       m_ulCurrentWritePosition;
-    LONG                        m_IsCurrentWritePositionUpdated;
 
 public:
     DECLARE_STD_UNKNOWN();
@@ -77,8 +75,7 @@ public:
         _In_  PPORTWAVERTSTREAM   Stream,
         _In_  ULONG               Channel,
         _In_  BOOLEAN             Capture,
-        _In_  PKSDATAFORMAT       DataFormat,
-        _In_  GUID                SignalProcessingMode
+        _In_  PKSDATAFORMAT       DataFormat
     );
 
     // Friends
@@ -109,7 +106,6 @@ protected:
     ULONG                       m_byteDisplacementCarryForward;
     ULONG                       m_ulDmaMovementRate;
     PWAVEFORMATEXTENSIBLE       m_pWfExt;
-    GUID                        m_SignalProcessingMode;
     KSPIN_LOCK                  m_PositionSpinLock;
 
 public:
@@ -119,22 +115,6 @@ public:
     (
         _Out_  KSAUDIO_PRESENTATION_POSITION *_pPresentationPosition
     );
-
-    ULONG GetCurrentWaveRTWritePosition()
-    {
-        return m_ulCurrentWritePosition;
-    };
-
-    // To support simple underrun validation.
-    BOOL IsCurrentWaveRTWritePositionUpdated()
-    {
-        return InterlockedExchange(&m_IsCurrentWritePositionUpdated, 0) ? TRUE : FALSE;
-    };
-
-    GUID GetSignalProcessingMode()
-    {
-        return m_SignalProcessingMode;
-    }
 
 private:
 
