@@ -35,6 +35,12 @@ require "$package" 'AudioProgram-Setup-$Version.exe'
 require "$package" 'AudioProgram-$Version-portable.zip'
 require "$test_ps1" "silent uninstall deleted settings"
 require "$test_ps1" "--headless"
+require "$test_ps1" "GUI exited immediately"
+require "crates/app/src/main.rs" 'windows_subsystem = "windows"'
+require "crates/backend/src/wasapi_backend.rs" "initialize_sta()"
+if grep -q "initialize_mta" "crates/backend/src/wasapi_backend.rs"; then
+    fail "UI thread still initializes the MTA"
+fi
 
 if grep -E -q '^AppPublisher=' "$iss"; then
     fail "AppPublisher is set; unsigned builds omit it"

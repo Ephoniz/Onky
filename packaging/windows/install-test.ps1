@@ -51,6 +51,43 @@ function Get-ExeFromUninstallString([string]$Text) {
     return ($Text -split ' ', 2)[0]
 }
 
+function Get-WindowsSubsystem([string]$Path) {
+    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    Assert-True ($bytes.Length -ge 0x40 -and $bytes[0] -eq 0x4D -and $bytes[1] -eq 0x5A) "not a PE file: $Path"
+    $pe = [BitConverter]::ToInt32($bytes, 0x3C)
+    Assert-True ($pe -gt 0 -and ($pe + 94) -lt $bytes.Length) "PE header is truncated: $Path"
+    return [BitConverter]::ToUInt16($bytes, $pe + 24 + 68)
+}
+
+function Assert-GuiStaysOpen([string]$Exe) {
+    # IMAGE_SUBSYSTEM_WINDOWS_GUI. A console subsystem (3) flashes a terminal.
+    $subsystem = Get-WindowsSubsystem $Exe
+    Assert-True ($subsystem -eq 2) "mixer is a console program (subsystem $subsystem)"
+    $log = Join-Path (Split-Path -Parent $Exe) "audio-program-startup.log"
+    if (Test-Path -LiteralPath $log) {
+        Remove-Item -LiteralPath $log -Force
+    }
+    $proc = Start-Process -FilePath $Exe -WorkingDirectory (Split-Path -Parent $Exe) -PassThru
+    try {
+        $exited = $proc.WaitForExit(15000)
+        $note = ""
+        if (Test-Path -LiteralPath $log) {
+            $note = [System.IO.File]::ReadAllText($log)
+        }
+        if ($exited) {
+            throw "GUI exited immediately (exit $($proc.ExitCode)). $note"
+        }
+        if ($note -ne "") {
+            throw "GUI logged a startup failure: $note"
+        }
+    } finally {
+        if (-not $proc.HasExited) {
+            Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+            $proc.WaitForExit()
+        }
+    }
+}
+
 function Assert-HeadlessStarts([string]$Exe, [string]$LogDir) {
     $outFile = Join-Path $LogDir "headless-out.txt"
     $errFile = Join-Path $LogDir "headless-err.txt"
@@ -187,6 +224,7 @@ try {
     Assert-True ($installedHash -eq $builtHash) "installed mixer does not match the build"
 
     Assert-HeadlessStarts $installedExe $logDir
+    Assert-GuiStaysOpen $installedExe
     Get-Process -Name "audio-program" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 
