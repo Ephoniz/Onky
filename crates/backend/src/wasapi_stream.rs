@@ -317,3 +317,7 @@ impl Drop for ProAudioThread {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "wasapi_stream_tests.rs"]
+mod tests;
