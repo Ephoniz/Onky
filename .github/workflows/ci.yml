@@ -36,6 +36,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Packaging tests
+        run: |
+          bash ./scripts/check-release-version-test.sh
+          bash ./scripts/write-sha256sums-test.sh
+          bash ./scripts/installer-script-test.sh
       - uses: dtolnay/rust-toolchain@1.99.0
       - name: Install system libraries
         run: sudo apt-get update && sudo apt-get install -y pkg-config clang libclang-dev libpipewire-0.3-dev libxkbcommon-dev libwayland-dev libx11-dev libegl1-mesa-dev libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev libxfixes-dev libgl1-mesa-dev libssl-dev
@@ -61,3 +66,58 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: EmbarkStudios/cargo-deny-action@v2
+
+  installer:
+    name: installer
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.99.0
+      - name: Build the mixer
+        run: cargo build --release -p audio-program
+      - name: Package version
+        id: pkg
+        shell: bash
+        run: |
+          version="$(bash ./scripts/check-release-version.sh --print-cargo-version)"
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            version="${version}-pr.${{ github.event.pull_request.number }}"
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+      - name: Install Inno Setup
+        shell: pwsh
+        run: ./packaging/windows/install-inno.ps1
+      - name: Build the installer and portable zip
+        shell: pwsh
+        run: |
+          $iscc = (Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP "iscc-path.txt")).Trim()
+          ./packaging/windows/package.ps1 -Version "${{ steps.pkg.outputs.version }}" -Iscc $iscc
+      - name: Checksums
+        shell: bash
+        run: bash ./scripts/write-sha256sums.sh dist
+      - name: Install and uninstall
+        shell: pwsh
+        run: ./packaging/windows/install-test.ps1 -Version "${{ steps.pkg.outputs.version }}"
+      - name: Upload installer logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-logs
+          path: logs
+          retention-days: 14
+      - name: Upload the failed package
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: failed-package
+          path: dist
+          retention-days: 14
+      - name: Upload the installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: AudioProgram-${{ steps.pkg.outputs.version }}
+          path: |
+            dist/AudioProgram-*
+            dist/SHA256SUMS.txt
+          retention-days: 14
+          if-no-files-found: error

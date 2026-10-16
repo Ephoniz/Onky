@@ -9,53 +9,116 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    name: version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      prerelease: ${{ steps.check.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check tag, Cargo.toml, and CHANGELOG
+        id: check
+        run: |
+          bash ./scripts/check-release-version.sh \
+            --tag "$GITHUB_REF_NAME" \
+            --notes release-notes.md \
+            --meta "$RUNNER_TEMP/release-meta.txt"
+          cat "$RUNNER_TEMP/release-meta.txt" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          retention-days: 14
+
   build:
     name: build
+    needs: version
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        include:
-          - os: ubuntu-latest
-            artifact: audio-program-linux-x86_64
-            binary: target/release/audio-program
-          - os: windows-latest
-            artifact: audio-program-windows-x86_64.exe
-            binary: target/release/audio-program.exe
+        os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.99.0
       - name: Install system libraries
-        if: runner.os == 'Linux'
+        if: success() && runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y pkg-config clang libclang-dev libpipewire-0.3-dev libxkbcommon-dev libwayland-dev libx11-dev libegl1-mesa-dev libxcb1-dev libxcursor-dev libxrandr-dev libxi-dev libxfixes-dev libgl1-mesa-dev libssl-dev
-      - run: cargo build --release -p audio-program
-      - uses: actions/upload-artifact@v4
+      - name: Build the mixer
+        run: cargo build --release -p audio-program
+      - name: Stage the Linux binary
+        if: success() && runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          cp target/release/audio-program dist/audio-program-linux-x86_64
+      - name: Upload the Linux binary
+        if: success() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: ${{ matrix.binary }}
+          name: release-assets-linux
+          path: dist/audio-program-linux-x86_64
+          if-no-files-found: error
+      - name: Install Inno Setup
+        if: success() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/windows/install-inno.ps1
+      - name: Build the installer and portable zip
+        if: success() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $iscc = (Get-Content -LiteralPath (Join-Path $env:RUNNER_TEMP "iscc-path.txt")).Trim()
+          ./packaging/windows/package.ps1 -Version "${{ needs.version.outputs.version }}" -Iscc $iscc
+      - name: Checksums
+        if: success() && runner.os == 'Windows'
+        shell: bash
+        run: bash ./scripts/write-sha256sums.sh dist
+      - name: Install and uninstall
+        if: success() && runner.os == 'Windows'
+        shell: pwsh
+        run: ./packaging/windows/install-test.ps1 -Version "${{ needs.version.outputs.version }}"
+      - name: Upload installer logs
+        if: failure() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-logs
+          path: logs
+          retention-days: 14
+      - name: Upload the Windows package
+        if: success() && runner.os == 'Windows'
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-windows
+          path: |
+            dist/AudioProgram-*
+            dist/SHA256SUMS.txt
+          if-no-files-found: error
 
   draft:
     name: draft
-    needs: build
+    needs: [version, build]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
-          path: artifacts
+          name: release-notes
+          path: notes
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-assets-*
           merge-multiple: true
-      - name: Changelog section for this tag
+          path: assets
+      - name: Checksums for the release files
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          awk -v ver="$version" '
-            $0 ~ "^## \\[" ver "\\]" { found = 1; next }
-            found && $0 ~ "^## " { exit }
-            found { print }
-          ' CHANGELOG.md > release-notes.md
-          if [ ! -s release-notes.md ]; then
-            echo "See CHANGELOG.md." > release-notes.md
-          fi
+          version="${{ needs.version.outputs.version }}"
+          test -f "assets/AudioProgram-Setup-${version}.exe"
+          test -f "assets/AudioProgram-${version}-portable.zip"
+          test -f "assets/audio-program-linux-x86_64"
+          bash ./scripts/write-sha256sums.sh assets
+          (cd assets && sha256sum -c SHA256SUMS.txt)
       - uses: softprops/action-gh-release@v2
         with:
           draft: true
-          body_path: release-notes.md
-          files: artifacts/*
+          prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
+          body_path: notes/release-notes.md
+          files: assets/*
