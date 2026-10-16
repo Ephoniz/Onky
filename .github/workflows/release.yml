@@ -25,7 +25,7 @@ jobs:
             --notes release-notes.md \
             --meta "$RUNNER_TEMP/release-meta.txt"
           cat "$RUNNER_TEMP/release-meta.txt" >> "$GITHUB_OUTPUT"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: release-notes
           path: release-notes.md
@@ -53,7 +53,7 @@ jobs:
           cp target/release/audio-program dist/audio-program-linux-x86_64
       - name: Upload the Linux binary
         if: success() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-linux
           path: dist/audio-program-linux-x86_64
@@ -78,14 +78,14 @@ jobs:
         run: ./packaging/windows/install-test.ps1 -Version "${{ needs.version.outputs.version }}"
       - name: Upload installer logs
         if: failure() && runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installer-logs
           path: logs
           retention-days: 14
       - name: Upload the Windows package
         if: success() && runner.os == 'Windows'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-assets-windows
           path: |
