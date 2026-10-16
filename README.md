@@ -34,9 +34,15 @@ Uninstall removes the program and its shortcuts. If `%APPDATA%\Audio Program` ex
 
 On startup the Windows app asks GitHub Releases if a newer version exists. It downloads that release's setup file only when `SHA256SUMS.txt` matches, then runs the installer and opens the app again. If you are offline, or the check fails, the app still opens. Turn the check off with a line `updates=off` in `%APPDATA%\Audio Program\settings.txt`, or clear "Check for updates" in the window.
 
-Windows opens hardware endpoints with WASAPI shared mode. CI builds and installs this mixer. Streaming on a real Windows device is still unproven.
+The window lists every active Windows playback and recording device. Tick one to make it a strip. Input strips have a fader and mute, and the routing matrix sends them to output strips. Each device streams in WASAPI shared mode on its own thread. One output strip is the master clock, the first one unless you pick another. Every other device is adaptively resampled to it. With no output open, an internal clock runs the mixer.
 
-WASAPI does not create virtual cables. A shared-mode loopback of a speaker is a recording of that endpoint, and other applications cannot select it as a device. Selectable cables come from the kernel driver developed separately under `driver/`. Until that driver is loaded, creating a cable returns an error and the mixer shows it.
+Cables that another driver already installed, such as VB-Cable or VoiceMeeter, are ordinary devices here. To send a browser through the mixer, play it into **CABLE Input**, tick **CABLE Output** as an input strip, and route it to your headphones.
+
+If a device is unplugged or its format changes, its strip says so and the rest keeps playing. The strip comes back when Windows lists the device again, or when you press **Reconnect**. The chosen devices, faders, mutes, routes, and master are saved in `%APPDATA%\Audio Program\session.json`.
+
+CI builds and installs this mixer, but has no sound card. Streaming has to be checked on a real PC. Capturing one application without a cable (process loopback) is not in the app yet.
+
+WASAPI does not create virtual cables. A shared-mode loopback of a speaker is a recording of that endpoint, and other applications cannot select it as a device. Audio Program's own selectable cables come from the kernel driver developed separately under `driver/`.
 
 ## Signing
 
