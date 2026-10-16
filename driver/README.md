@@ -27,7 +27,7 @@ gain or format conversion; the Audio Program app does that in user mode.
 | `src/loopback_ring.h`, `src/loopback.h` | The cable ring buffer (MIT). Kernel-independent, unit-tested on the host. |
 | `tests/` | Host unit tests for the ring buffer. |
 | `AudioProgramCable.inx` | INF template; StampInf turns it into `AudioProgramCable.inf`. |
-| `AudioProgramCable.vcxproj`, `.sln` | WDK project (WDM driver, `WindowsKernelModeDriver10.0`). |
+| `AudioProgramCable.vcxproj` | WDK project (WDM driver, `WindowsKernelModeDriver10.0`). |
 | `packages.config`, `Directory.Build.props` | Pinned Windows SDK/WDK from NuGet (10.0.26100.6584). |
 | `build.ps1` | Builds, packages and optionally test-signs the driver. |
 | `scripts/` | Test certificate, signing, test mode, install/uninstall, cable count, status. |
