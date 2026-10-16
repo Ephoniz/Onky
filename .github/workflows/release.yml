@@ -116,7 +116,7 @@ jobs:
           test -f "assets/audio-program-linux-x86_64"
           bash ./scripts/write-sha256sums.sh assets
           (cd assets && sha256sum -c SHA256SUMS.txt)
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           draft: true
           prerelease: ${{ needs.version.outputs.prerelease == 'true' }}
