@@ -30,6 +30,10 @@ pub use pipewire_backend::PipeWireBackend;
 mod wasapi_backend;
 #[cfg(windows)]
 pub use wasapi_backend::WasapiBackend;
+#[cfg(windows)]
+mod wasapi_stream;
+#[cfg(windows)]
+pub use wasapi_stream::DeviceStream;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct HardwareDevice {

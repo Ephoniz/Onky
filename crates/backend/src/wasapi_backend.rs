@@ -1,14 +1,16 @@
-//! WASAPI shared mode for hardware endpoints.
+//! WASAPI shared mode for existing endpoints.
 //!
-//! Virtual cables are not created here. A shared-mode loopback of a speaker is
-//! not a device other applications can select. Selectable cables come from the
+//! Any active endpoint can be a strip, including cables from other drivers such as
+//! VB-Cable. Virtual cables are not created here. A shared-mode loopback of a speaker
+//! is not a device other applications can select. Selectable cables come from the
 //! kernel driver in `driver/`.
 
 use std::sync::Arc;
 
 use audio_program_engine::Shared;
-use wasapi::{initialize_sta, DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat};
+use wasapi::{initialize_sta, DeviceEnumerator, Direction};
 
+use crate::wasapi_stream::{self, DeviceStream};
 use crate::{
     BackendError, CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend,
     WINDOWS_VIRTUAL_CABLES,
@@ -29,37 +31,28 @@ impl WasapiBackend {
         Ok(Self)
     }
 
-    /// Initialize one hardware endpoint in shared mode at 48 kHz stereo float.
+    /// Open an endpoint that captures into engine input `input`. Virtual cables count too.
     ///
-    /// This checks that the endpoint accepts the format. It does not start a
-    /// render or capture thread, and nothing in the session calls it yet.
-    /// Streaming on a real Windows device is still unproven.
-    pub fn open_shared(&self, device_id: &str, output: bool) -> Result<(), BackendError> {
-        let enumerator =
-            DeviceEnumerator::new().map_err(|err| BackendError::Device(err.to_string()))?;
-        let device = enumerator
-            .get_device(device_id)
-            .map_err(|err| BackendError::Device(err.to_string()))?;
-        let mut client = device
-            .get_iaudioclient()
-            .map_err(|err| BackendError::Device(err.to_string()))?;
-        let format = WaveFormat::new(32, 32, &SampleType::Float, 48_000, 2, None);
-        let (period, _) = client
-            .get_device_period()
-            .map_err(|err| BackendError::Device(err.to_string()))?;
-        let direction = if output {
-            Direction::Render
-        } else {
-            Direction::Capture
-        };
-        let mode = StreamMode::EventsShared {
-            autoconvert: true,
-            buffer_duration_hns: period,
-        };
-        client
-            .initialize_client(&format, &direction, &mode)
-            .map_err(|err| BackendError::Device(err.to_string()))?;
-        Ok(())
+    /// Nothing streams until [`DeviceStream::start`].
+    pub fn open_capture(
+        &self,
+        device_id: &str,
+        input: usize,
+        shared: &Arc<Shared>,
+    ) -> Result<DeviceStream, BackendError> {
+        wasapi_stream::open_capture(device_id, input, shared)
+    }
+
+    /// Open an endpoint that plays engine output `output`. Virtual cables count too.
+    ///
+    /// Nothing streams until [`DeviceStream::start`] or [`DeviceStream::start_as_clock`].
+    pub fn open_render(
+        &self,
+        device_id: &str,
+        output: usize,
+        shared: &Arc<Shared>,
+    ) -> Result<DeviceStream, BackendError> {
+        wasapi_stream::open_render(device_id, output, shared)
     }
 }
 
