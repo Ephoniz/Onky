@@ -32,6 +32,8 @@ Download `AudioProgram-Setup-<version>.exe` from a [GitHub Release](https://gith
 
 Uninstall removes the program and its shortcuts. If `%APPDATA%\Audio Program` exists, it asks "Also delete your settings?" and the default is No. A silent uninstall leaves that folder in place.
 
+On startup the Windows app asks GitHub Releases if a newer version exists. It downloads that release's setup file only when `SHA256SUMS.txt` matches, then runs the installer and opens the app again. If you are offline, or the check fails, the app still opens. Turn the check off with a line `updates=off` in `%APPDATA%\Audio Program\settings.txt`, or clear "Check for updates" in the window.
+
 Windows opens hardware endpoints with WASAPI shared mode. CI builds and installs this mixer. Streaming on a real Windows device is still unproven.
 
 WASAPI does not create virtual cables. A shared-mode loopback of a speaker is a recording of that endpoint, and other applications cannot select it as a device. Selectable cables come from the kernel driver developed separately under `driver/`. Until that driver is loaded, creating a cable returns an error and the mixer shows it.

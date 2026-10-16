@@ -5,6 +5,8 @@
 use audio_program::{
     attach_parent_console, draw, install_panic_hook, install_style, report_startup_failure, Session,
 };
+#[cfg(windows)]
+use audio_program::{set_updates_enabled, updates_enabled_at, updates_setting_path};
 
 fn main() {
     let headless = std::env::args().any(|arg| arg == "--headless");
@@ -14,6 +16,8 @@ fn main() {
         return;
     }
     install_panic_hook();
+    #[cfg(windows)]
+    audio_program::apply_pending_update();
     launch_window(Session::start());
 }
 
@@ -49,7 +53,13 @@ fn launch_window(session: Session) {
         options,
         Box::new(|cc| {
             install_style(&cc.egui_ctx);
-            Ok(Box::new(Mixer { session }))
+            Ok(Box::new(Mixer {
+                session,
+                #[cfg(windows)]
+                check_updates: updates_setting_path()
+                    .as_deref()
+                    .is_none_or(updates_enabled_at),
+            }))
         }),
     );
     if let Err(err) = result {
@@ -59,13 +69,28 @@ fn launch_window(session: Session) {
 
 struct Mixer {
     session: Session,
+    #[cfg(windows)]
+    check_updates: bool,
 }
 
 impl eframe::App for Mixer {
     fn ui(&mut self, ui: &mut eframe::egui::Ui, _frame: &mut eframe::Frame) {
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_millis(33));
-        draw(ui, &mut self.session);
+        #[cfg(windows)]
+        let updates_before = self.check_updates;
+        draw(
+            ui,
+            &mut self.session,
+            #[cfg(windows)]
+            Some(&mut self.check_updates),
+            #[cfg(not(windows))]
+            None,
+        );
+        #[cfg(windows)]
+        if self.check_updates != updates_before {
+            let _ = set_updates_enabled(self.check_updates);
+        }
     }
 }
 
