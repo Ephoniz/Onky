@@ -33,19 +33,17 @@ fn run_headless(session: Session) {
 }
 
 fn launch_window(session: Session) {
-    let mut options = eframe::NativeOptions {
+    // The Windows software OpenGL driver is 1.1, so a glow window exits at once.
+    // wgpu paints with Direct3D instead.
+    let options = eframe::NativeOptions {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size([980.0, 720.0])
             .with_min_inner_size([640.0, 480.0])
             .with_title("Audio Program"),
+        #[cfg(windows)]
+        renderer: eframe::Renderer::Wgpu,
         ..Default::default()
     };
-    // The Windows software OpenGL driver is 1.1, so a glow window exits at once.
-    // wgpu paints with Direct3D instead.
-    #[cfg(windows)]
-    {
-        options.renderer = eframe::Renderer::Wgpu;
-    }
     let result = eframe::run_native(
         "Audio Program",
         options,
