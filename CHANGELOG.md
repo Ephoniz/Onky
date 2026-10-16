@@ -6,6 +6,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.1.0-alpha.1] - 2026-10-16
+
 ### Added
 
 - Unsigned all-users Windows installer and a portable mixer zip, with checksums. Pull-request builds are artifacts. A release tag must match `Cargo.toml` and this changelog.
