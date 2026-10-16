@@ -18,7 +18,8 @@
 #define MyAppExeName "audio-program.exe"
 
 [Setup]
-AppId={{F605ED42-60D8-49A9-A2E2-98BC6BB1579F}}
+; The opening brace is doubled so it stays literal. The closing brace is not.
+AppId={{F605ED42-60D8-49A9-A2E2-98BC6BB1579F}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppVerName={#MyAppName} {#MyAppVersion}

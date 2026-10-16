@@ -39,6 +39,11 @@ function Assert-Checksums([string]$Dir, [string[]]$ExpectedNames) {
     Assert-True ($want -eq $got) "checksum files [$got] expected [$want]"
 }
 
+function Open-UninstallKey([Microsoft.Win32.RegistryHive]$Hive, [string]$SubName) {
+    $base = [Microsoft.Win32.RegistryKey]::OpenBaseKey($Hive, [Microsoft.Win32.RegistryView]::Registry64)
+    return $base.OpenSubKey($SubName)
+}
+
 function Get-ExeFromUninstallString([string]$Text) {
     if ($Text -match '^"([^"]+)"') {
         return $Matches[1]
@@ -122,11 +127,9 @@ Assert-True ($builtHash -eq $zipHash) "portable zip mixer does not match the bui
 
 $issPath = Join-Path $PSScriptRoot "audio-program.iss"
 $issText = [System.IO.File]::ReadAllText($issPath)
-Assert-True ($issText -match 'AppId=\{\{([0-9A-Fa-f-]+)\}\}') "AppId not found in the installer script"
+Assert-True ($issText -match 'AppId=\{\{([0-9A-Fa-f-]+)\}(\r?\n|$)') "AppId not found in the installer script"
 $guid = $Matches[1]
-$keyName = "{" + $guid + "}_is1"
-$hklm = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$keyName"
-$hkcu = "HKCU:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$keyName"
+$uninstallSub = "SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{$guid}_is1"
 
 $appDir = Join-Path $env:ProgramFiles "Audio Program"
 $installedExe = Join-Path $appDir "audio-program.exe"
@@ -166,14 +169,15 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $userDesktop)) "per-user desktop shortcut was created"
     Assert-True (-not (Test-Path -LiteralPath $userPrograms)) "install was not all-users"
     Assert-True (-not (Test-Path -LiteralPath $wrongDir)) "mixer was installed into Program Files (x86)"
-    Assert-True (Test-Path -LiteralPath $hklm) "all-users uninstall entry missing"
-    Assert-True (-not (Test-Path -LiteralPath $hkcu)) "per-user uninstall entry was written"
+    $hklmKey = Open-UninstallKey ([Microsoft.Win32.RegistryHive]::LocalMachine) $uninstallSub
+    $hkcuKey = Open-UninstallKey ([Microsoft.Win32.RegistryHive]::CurrentUser) $uninstallSub
+    Assert-True ($null -ne $hklmKey) "all-users uninstall entry missing"
+    Assert-True ($null -eq $hkcuKey) "per-user uninstall entry was written"
 
-    $entry = Get-ItemProperty -LiteralPath $hklm
-    Assert-True ($entry.DisplayVersion -eq $Version) "display version was $($entry.DisplayVersion)"
-    Assert-True ([string]::IsNullOrEmpty($entry.Publisher)) "publisher should be empty"
-    $location = [string]$entry.InstallLocation
-    $location = $location.TrimEnd('\')
+    $displayVersion = [string]$hklmKey.GetValue("DisplayVersion")
+    Assert-True ($displayVersion -eq $Version) "display version was $displayVersion"
+    Assert-True ([string]::IsNullOrEmpty([string]$hklmKey.GetValue("Publisher"))) "publisher should be empty"
+    $location = ([string]$hklmKey.GetValue("InstallLocation")).TrimEnd('\')
     Assert-True ($location -eq $appDir) "install location was $location"
 
     $shortcut = (New-Object -ComObject WScript.Shell).CreateShortcut($appLink)
@@ -189,7 +193,7 @@ try {
     New-Item -ItemType Directory -Force -Path $settings | Out-Null
     [System.IO.File]::WriteAllText($settingsFile, "keep")
 
-    $unins = Get-ExeFromUninstallString ([string]$entry.UninstallString)
+    $unins = Get-ExeFromUninstallString ([string]$hklmKey.GetValue("UninstallString"))
     Assert-True (Test-Path -LiteralPath $unins) "uninstaller missing: $unins"
     $uninstallLog = Join-Path $logDir "uninstall.log"
     $removed = Start-Process -FilePath $unins -ArgumentList @(
@@ -216,7 +220,7 @@ try {
     Assert-True (-not (Test-Path -LiteralPath $appLink)) "Start menu shortcut still present"
     Assert-True (-not (Test-Path -LiteralPath $uninstallLink)) "uninstall shortcut still present"
     Assert-True (-not (Test-Path -LiteralPath $group)) "Start menu folder still present"
-    Assert-True (-not (Test-Path -LiteralPath $hklm)) "uninstall entry still present"
+    Assert-True ($null -eq (Open-UninstallKey ([Microsoft.Win32.RegistryHive]::LocalMachine) $uninstallSub)) "uninstall entry still present"
     Assert-True (Test-Path -LiteralPath $settingsFile) "silent uninstall deleted settings"
 } finally {
     Get-Process -Name "audio-program" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

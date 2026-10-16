@@ -27,7 +27,10 @@ require "$iss" "UninstallSilent"
 require "$iss" "MB_DEFBUTTON2"
 require "$iss" "Flags: postinstall nowait skipifsilent"
 require "$iss" "Flags: unchecked"
-require "$iss" "AppId={{F605ED42-60D8-49A9-A2E2-98BC6BB1579F}}"
+require "$iss" "AppId={{F605ED42-60D8-49A9-A2E2-98BC6BB1579F}"
+if grep -F -q "AppId={{F605ED42-60D8-49A9-A2E2-98BC6BB1579F}}" "$iss"; then
+    fail "AppId closing brace is doubled"
+fi
 require "$package" 'AudioProgram-Setup-$Version.exe'
 require "$package" 'AudioProgram-$Version-portable.zip'
 require "$test_ps1" "silent uninstall deleted settings"
