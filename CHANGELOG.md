@@ -8,6 +8,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
+- Unsigned all-users Windows installer and a portable mixer zip, with checksums. Pull-request builds are artifacts. A release tag must match `Cargo.toml` and this changelog.
 - Real-time mixer graph with gain, mute, multi-route, and adaptive resampling of every device that is not the master clock.
 - PipeWire virtual cables on Linux, removed when the process exits.
 - WASAPI shared-mode hardware listing on Windows. Virtual cables are left to the kernel driver in `driver/`.

@@ -18,6 +18,9 @@ cargo clippy --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p audio-program-engine --release --lib reference_session_cpu_budget -- --nocapture
 cargo deny check
+bash ./scripts/check-release-version-test.sh
+bash ./scripts/write-sha256sums-test.sh
+bash ./scripts/installer-script-test.sh
 ```
 
 The CPU budget is the release measurement. A debug run is not that measurement.
@@ -28,7 +31,7 @@ These settings are the recommendation for `main`. They are not applied by this r
 
 - Require a pull request before merging into `main`.
 - Require at least one approval.
-- Require these checks: `fmt`, `clippy`, `test`, `windows`, `deny`.
+- Require these checks: `fmt`, `clippy`, `test`, `windows`, `deny`, `installer`.
 - Require the branch to be up to date before merging.
 - Do not allow force-pushes to `main`.
 - Do not allow deletion of `main`.

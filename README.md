@@ -26,7 +26,13 @@ sudo apt install pkg-config clang libclang-dev libpipewire-0.3-dev \
 
 ## Windows
 
-Windows opens hardware endpoints with WASAPI shared mode. That path compiles here and has not been run on a Windows machine.
+Download `AudioProgram-Setup-<version>.exe` from a [GitHub Release](https://github.com/Ephoniz/Onky/releases). It installs the mixer for every user, and Windows asks for administrator approval. The setup file is unsigned, so SmartScreen shows "Windows protected your PC". Choose **More info**, then **Run anyway**. A desktop shortcut is optional and off unless you tick it.
+
+`AudioProgram-<version>-portable.zip` is the mixer only. Unzip it and run `audio-program.exe` inside the `AudioProgram` folder. It does not need administrator approval. `SHA256SUMS.txt` lists the checksums for the release files. Pull request builds upload the same files as artifacts, kept for 14 days.
+
+Uninstall removes the program and its shortcuts. If `%APPDATA%\Audio Program` exists, it asks "Also delete your settings?" and the default is No. A silent uninstall leaves that folder in place.
+
+Windows opens hardware endpoints with WASAPI shared mode. CI builds and installs this mixer. Streaming on a real Windows device is still unproven.
 
 WASAPI does not create virtual cables. A shared-mode loopback of a speaker is a recording of that endpoint, and other applications cannot select it as a device. Selectable cables come from the kernel driver developed separately under `driver/`. Until that driver is loaded, creating a cable returns an error and the mixer shows it.
 
@@ -50,6 +56,9 @@ cargo clippy --all-targets -- -D warnings
 cargo test --workspace
 cargo test -p audio-program-engine --release --lib reference_session_cpu_budget -- --nocapture
 cargo deny check
+bash ./scripts/check-release-version-test.sh
+bash ./scripts/write-sha256sums-test.sh
+bash ./scripts/installer-script-test.sh
 ```
 
-Releases are git tags `vX.Y.Z`. The version in `Cargo.toml` is the version. See [CHANGELOG.md](CHANGELOG.md) and [CONTRIBUTING.md](CONTRIBUTING.md).
+Releases are git tags `vX.Y.Z`. The tag, the version in `Cargo.toml`, and the matching [CHANGELOG.md](CHANGELOG.md) section must agree. A tag with `-alpha`, `-beta`, or `-rc` is a pre-release. See [CONTRIBUTING.md](CONTRIBUTING.md).
