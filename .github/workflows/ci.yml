@@ -49,7 +49,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.99.0
+        with:
+          components: clippy
       - run: cargo build --workspace
+      - run: cargo clippy --all-targets -- -D warnings
+      - run: cargo test --workspace
 
   deny:
     name: deny
