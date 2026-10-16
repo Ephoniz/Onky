@@ -166,40 +166,5 @@ fn cubic(y0: f32, y1: f32, y2: f32, y3: f32, t: f32) -> f32 {
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn slew_moves_without_jumping_and_stops_at_the_cap() {
-        let mut resampler = Resampler::new();
-        resampler.set_rates(48_000, 48_000);
-        assert_eq!(resampler.ratio_ppm(), 0.0);
-        resampler.slew_input_fill(DRIFT_TARGET_FRAMES + 8_000);
-        assert!(resampler.ratio_ppm() > 0.0);
-        assert!(resampler.ratio_ppm() <= SLEW_PPM_PER_BLOCK + 1e-9);
-        let mut previous = resampler.ratio_ppm();
-        for _ in 0..40 {
-            resampler.slew_input_fill(DRIFT_TARGET_FRAMES + 8_000);
-            let delta = resampler.ratio_ppm() - previous;
-            assert!(delta <= SLEW_PPM_PER_BLOCK + 1e-6);
-            assert!(delta >= -1e-9);
-            previous = resampler.ratio_ppm();
-        }
-        assert!((resampler.ratio_ppm() - MAX_RATIO_PPM).abs() < 1e-6);
-    }
-
-    #[test]
-    fn constant_signal_survives_ratio_one() {
-        let mut resampler = Resampler::new();
-        resampler.set_rates(48_000, 48_000);
-        resampler.set_channels(2);
-        let input = vec![[0.5, -0.25, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]; BLOCK_FRAMES + 8];
-        let mut output = vec![[0.0; MAX_CHANNELS]; BLOCK_FRAMES];
-        resampler.render_input(&input, &mut output);
-        resampler.render_input(&input, &mut output);
-        for frame in &output {
-            assert!((frame[0] - 0.5).abs() < 1e-5);
-            assert!((frame[1] + 0.25).abs() < 1e-5);
-        }
-    }
-}
+#[path = "resample_tests.rs"]
+mod tests;

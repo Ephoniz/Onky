@@ -25,13 +25,9 @@ unsafe impl Sync for SpscRing {}
 impl SpscRing {
     pub fn new() -> Self {
         Self {
-            buf: {
-                let mut buf = Vec::with_capacity(RING_FRAMES);
-                for _ in 0..RING_FRAMES {
-                    buf.push(UnsafeCell::new([0.0; crate::MAX_CHANNELS]));
-                }
-                buf.into_boxed_slice()
-            },
+            buf: (0..RING_FRAMES)
+                .map(|_| UnsafeCell::new([0.0; crate::MAX_CHANNELS]))
+                .collect(),
             write: AtomicUsize::new(0),
             read: AtomicUsize::new(0),
         }
@@ -81,3 +77,7 @@ impl SpscRing {
         count
     }
 }
+
+#[cfg(test)]
+#[path = "ring_tests.rs"]
+mod tests;
