@@ -1,4 +1,6 @@
 /target
+/dist
+/logs
 **/*.rs.bk
 *.wav
 *.raw
