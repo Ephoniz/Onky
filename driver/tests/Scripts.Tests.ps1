@@ -45,6 +45,25 @@ Describe 'Driver settings agree across INF, driver and scripts' {
     }
 }
 
+Describe 'Pinned Windows kit agrees across build files and scripts' {
+    It 'restores every NuGet package at the script kit version' {
+        $packages = ([xml](Get-Content -Raw (Join-Path $driverRoot 'packages.config'))).packages.package
+        $packages | Should -Not -BeNullOrEmpty
+        foreach ($package in $packages) { $package.version | Should -Be $script:ApcKitVersion }
+    }
+
+    It 'imports the NuGet kit at the script kit version' {
+        $props = Get-Content -Raw (Join-Path $driverRoot 'Directory.Build.props')
+        $props | Should -Match "<AudioProgramKitVersion>$([regex]::Escape($script:ApcKitVersion))</AudioProgramKitVersion>"
+    }
+
+    It 'targets the platform version the kit ships' {
+        $project = Get-Content -Raw (Join-Path $driverRoot 'AudioProgramCable.vcxproj')
+        $project | Should -Match "<WindowsTargetPlatformVersion[^>]*>$([regex]::Escape($script:ApcKitBin))</WindowsTargetPlatformVersion>"
+        $script:ApcKitVersion | Should -BeLike "$($script:ApcKitBin -replace '\.0$', '').*"
+    }
+}
+
 Describe 'Invoke-Native' {
     It 'returns an allowed exit code' {
         Invoke-Native $script:pwshPath @('-NoProfile', '-Command', 'exit 3') -AllowedExitCodes @(0, 3) |
