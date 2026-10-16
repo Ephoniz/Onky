@@ -100,20 +100,20 @@ jobs:
         run: ./packaging/windows/install-test.ps1 -Version "${{ steps.pkg.outputs.version }}"
       - name: Upload installer logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: installer-logs
           path: logs
           retention-days: 14
       - name: Upload the failed package
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: failed-package
           path: dist
           retention-days: 14
       - name: Upload the installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: AudioProgram-${{ steps.pkg.outputs.version }}
           path: |
