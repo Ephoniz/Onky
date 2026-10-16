@@ -20,21 +20,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  ring-tests:
-    name: Ring buffer unit tests
+  unit-tests:
+    name: Host unit tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - name: Build and run (g++, sanitizers)
         run: |
-          g++ -std=c++17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
-            -I driver/src driver/tests/loopback_ring_test.cpp -o ring-test
-          ./ring-test
+          for test in driver/tests/*.cpp; do
+            g++ -std=c++17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
+              -I driver/src "$test" -o test-bin
+            ./test-bin
+          done
       - name: Build and run (clang++)
         run: |
-          clang++ -std=c++17 -Wall -Wextra -Werror -O2 \
-            -I driver/src driver/tests/loopback_ring_test.cpp -o ring-test-clang
-          ./ring-test-clang
+          for test in driver/tests/*.cpp; do
+            clang++ -std=c++17 -Wall -Wextra -Werror -O2 -I driver/src "$test" -o test-bin
+            ./test-bin
+          done
 
   scripts:
     name: PowerShell script checks
