@@ -1,13 +1,19 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
+#[cfg(target_os = "linux")]
 use std::time::Duration;
 
 #[cfg(windows)]
 use audio_program_backend::BackendError;
 use audio_program_backend::{CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend};
-use audio_program_engine::{Engine, Shared, BLOCK_FRAMES, SAMPLE_RATE};
+#[cfg(target_os = "linux")]
+use audio_program_engine::BLOCK_FRAMES;
+#[cfg(any(test, target_os = "linux"))]
+use audio_program_engine::SAMPLE_RATE;
+use audio_program_engine::{Engine, Shared};
 
+#[cfg(any(test, target_os = "linux"))]
 const CABLES: usize = 2;
 
 pub struct Session {
