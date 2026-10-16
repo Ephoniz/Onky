@@ -9,11 +9,10 @@ use std::sync::Arc;
 use audio_program_engine::Shared;
 use wasapi::{initialize_mta, DeviceEnumerator, Direction, SampleType, StreamMode, WaveFormat};
 
-use crate::{BackendError, CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend};
-
-const DRIVER_CABLES: &str = "Windows virtual cables are created by the kernel driver in driver/. \
-WASAPI shared mode only opens hardware endpoints. A loopback of a playback device is not a \
-selectable cable.";
+use crate::{
+    BackendError, CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend,
+    WINDOWS_VIRTUAL_CABLES,
+};
 
 pub struct WasapiBackend;
 
@@ -94,7 +93,7 @@ impl VirtualCableBackend for WasapiBackend {
         _shared: &Arc<Shared>,
     ) -> Result<VirtualCable, BackendError> {
         Err(BackendError::VirtualCableUnavailable(
-            DRIVER_CABLES.to_string(),
+            WINDOWS_VIRTUAL_CABLES.to_string(),
         ))
     }
 
@@ -104,7 +103,7 @@ impl VirtualCableBackend for WasapiBackend {
         _shared: &Arc<Shared>,
     ) -> Result<VirtualCable, BackendError> {
         Err(BackendError::VirtualCableUnavailable(
-            DRIVER_CABLES.to_string(),
+            WINDOWS_VIRTUAL_CABLES.to_string(),
         ))
     }
 }

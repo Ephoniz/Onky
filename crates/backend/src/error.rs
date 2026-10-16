@@ -20,3 +20,7 @@ impl fmt::Display for BackendError {
 }
 
 impl std::error::Error for BackendError {}
+
+#[cfg(test)]
+#[path = "error_tests.rs"]
+mod tests;

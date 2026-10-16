@@ -10,6 +10,12 @@ use audio_program_engine::Shared;
 mod error;
 pub use error::BackendError;
 
+/// Returned when Windows is asked to create a virtual cable.
+pub const WINDOWS_VIRTUAL_CABLES: &str =
+    "Windows virtual cables are created by the kernel driver in driver/. \
+WASAPI shared mode only opens hardware endpoints. A loopback of a playback device is not a \
+selectable cable.";
+
 #[cfg(target_os = "linux")]
 mod pipewire_backend;
 #[cfg(target_os = "linux")]

@@ -303,16 +303,48 @@ fn hardware_from(inner: &Inner) -> Vec<HardwareDevice> {
     inner
         .node_info
         .iter()
-        .filter(|(_, info)| {
-            !info.name.starts_with("audio-program-")
-                && (info.class == "Audio/Sink" || info.class == "Audio/Source")
-        })
-        .map(|(id, info)| HardwareDevice {
-            id: id.to_string(),
-            name: info.name.clone(),
-            output: info.class == "Audio/Sink",
+        .filter_map(|(id, info)| {
+            hardware_output(&info.name, &info.class).map(|output| HardwareDevice {
+                id: id.to_string(),
+                name: info.name.clone(),
+                output,
+            })
         })
         .collect()
+}
+
+/// `Some(true)` is a playback device. Our own cables and virtual sources are skipped.
+fn hardware_output(name: &str, class: &str) -> Option<bool> {
+    if name.starts_with("audio-program-") {
+        return None;
+    }
+    match class {
+        "Audio/Sink" => Some(true),
+        "Audio/Source" => Some(false),
+        _ => None,
+    }
+}
+
+/// How many frames to write into a playback buffer.
+///
+/// PipeWire's mapped buffer can be longer than the audio it asked for, and
+/// longer than the mixer ring. Filling the spare space with silence is a gap
+/// in the recording, so this stops at the frames the mixer actually has.
+fn playback_frame_count(
+    chunk_bytes: usize,
+    buffer_bytes: usize,
+    stride: usize,
+    available: usize,
+) -> usize {
+    if stride == 0 || buffer_bytes < stride {
+        return 0;
+    }
+    let requested = if chunk_bytes >= stride {
+        chunk_bytes / stride
+    } else {
+        buffer_bytes / stride
+    };
+    requested.min(available).min(buffer_bytes / stride)
 }
 
 fn spawn_cable(
@@ -518,15 +550,12 @@ fn copy_stream(stream: &pw::stream::Stream, data: &mut StreamData) {
             return;
         };
         if data.playback {
-            let requested = if chunk_size >= stride {
-                chunk_size / stride
-            } else {
-                bytes.len() / stride
-            };
-            // The output ring holds about 85 ms. Padding the rest of a larger
-            // PipeWire buffer with silence is what the recorder hears as gaps.
-            let available = data.shared.output_available(data.index);
-            let frames = requested.min(available).min(bytes.len() / stride);
+            let frames = playback_frame_count(
+                chunk_size,
+                bytes.len(),
+                stride,
+                data.shared.output_available(data.index),
+            );
             let mut frame: Frame;
             for index in 0..frames {
                 frame = data
@@ -582,3 +611,7 @@ fn audio_format_pod() -> Vec<u8> {
     .map(|pod| pod.0.into_inner())
     .unwrap_or_default()
 }
+
+#[cfg(test)]
+#[path = "pipewire_tests.rs"]
+mod tests;
