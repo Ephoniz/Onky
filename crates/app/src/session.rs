@@ -1,17 +1,25 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::thread::JoinHandle;
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", windows))]
 use std::time::Duration;
 
-#[cfg(windows)]
-use audio_program_backend::BackendError;
-use audio_program_backend::{CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend};
-#[cfg(target_os = "linux")]
-use audio_program_engine::BLOCK_FRAMES;
 #[cfg(any(test, target_os = "linux"))]
+use audio_program_backend::CableSpec;
+#[cfg(target_os = "linux")]
+use audio_program_backend::VirtualCableBackend;
+use audio_program_backend::{HardwareDevice, VirtualCable};
+#[cfg(any(target_os = "linux", windows))]
+use audio_program_engine::BLOCK_FRAMES;
+#[cfg(any(test, target_os = "linux", windows))]
 use audio_program_engine::SAMPLE_RATE;
 use audio_program_engine::{Engine, Shared};
+
+use crate::strip::Strip;
+
+#[cfg(windows)]
+#[path = "session_wasapi.rs"]
+mod wasapi;
 
 #[cfg(any(test, target_os = "linux"))]
 const CABLES: usize = 2;
@@ -27,6 +35,8 @@ pub struct Session {
     backend: Option<audio_program_backend::PipeWireBackend>,
     #[cfg(windows)]
     backend: Option<audio_program_backend::WasapiBackend>,
+    #[cfg(windows)]
+    devices: wasapi::Devices,
     #[cfg(not(any(target_os = "linux", windows)))]
     backend: Option<()>,
 }
@@ -39,7 +49,7 @@ impl Session {
         }
         #[cfg(windows)]
         {
-            start_wasapi()
+            wasapi::start_wasapi()
         }
         #[cfg(not(any(target_os = "linux", windows)))]
         {
@@ -49,6 +59,17 @@ impl Session {
 
     pub fn shared(&self) -> Option<Arc<Shared>> {
         self.shared.clone()
+    }
+
+    pub fn strips(&self) -> Vec<Strip> {
+        #[cfg(windows)]
+        {
+            self.devices.strips()
+        }
+        #[cfg(not(windows))]
+        {
+            crate::strip::cable_strips(&self.cables)
+        }
     }
 
     #[cfg(not(target_os = "linux"))]
@@ -61,18 +82,35 @@ impl Session {
             stop: Arc::new(AtomicBool::new(true)),
             clock: None,
             backend: None,
+            #[cfg(windows)]
+            devices: wasapi::Devices::default(),
+        }
+    }
+
+    fn stop_audio(&mut self) {
+        #[cfg(windows)]
+        self.devices.stop_streams();
+        self.stop.store(true, Ordering::Relaxed);
+        if let Some(clock) = self.clock.take() {
+            let _ = clock.join();
         }
     }
 }
 
 impl Drop for Session {
     fn drop(&mut self) {
-        self.stop.store(true, Ordering::Relaxed);
-        if let Some(clock) = self.clock.take() {
-            let _ = clock.join();
-        }
+        #[cfg(windows)]
+        self.save_layout();
+        self.stop_audio();
         self.backend.take();
     }
+}
+
+/// Reopen every device after a stream failed, or after the device list changed
+/// while a strip had no device.
+#[cfg(any(test, windows))]
+fn should_reconnect(stream_failed: bool, devices_changed: bool, strip_unavailable: bool) -> bool {
+    stream_failed || (devices_changed && strip_unavailable)
 }
 
 #[cfg(target_os = "linux")]
@@ -81,11 +119,7 @@ fn start_pipewire() -> Session {
     configure_default(&mut engine);
     let shared = engine.shared();
     let stop = Arc::new(AtomicBool::new(false));
-    let clock_stop = Arc::clone(&stop);
-    let clock = std::thread::Builder::new()
-        .name("audio-program-clock".to_string())
-        .spawn(move || clock_loop(engine, clock_stop))
-        .ok();
+    let clock = spawn_clock(engine, Arc::clone(&stop));
 
     let mut backend = match audio_program_backend::PipeWireBackend::connect() {
         Ok(backend) => backend,
@@ -131,32 +165,6 @@ fn start_pipewire() -> Session {
     }
 }
 
-#[cfg(windows)]
-fn start_wasapi() -> Session {
-    let backend = match audio_program_backend::WasapiBackend::connect() {
-        Ok(backend) => backend,
-        Err(err) => return Session::empty(&err.to_string()),
-    };
-    let hardware = backend.list_hardware().unwrap_or_default();
-    let mut backend = backend;
-    let shared = Engine::new().shared();
-    let probe = cable_spec(0, false);
-    let error = match backend.create_virtual_input(probe, &shared) {
-        Ok(_) => None,
-        Err(BackendError::VirtualCableUnavailable(message)) => Some(message),
-        Err(err) => Some(err.to_string()),
-    };
-    Session {
-        cables: Vec::new(),
-        hardware,
-        error,
-        shared: None,
-        stop: Arc::new(AtomicBool::new(true)),
-        clock: None,
-        backend: Some(backend),
-    }
-}
-
 #[cfg(any(test, target_os = "linux"))]
 fn configure_default(engine: &mut Engine) {
     for index in 0..CABLES {
@@ -167,6 +175,7 @@ fn configure_default(engine: &mut Engine) {
     }
 }
 
+#[cfg(any(test, target_os = "linux"))]
 fn cable_spec(index: usize, output: bool) -> CableSpec {
     let (kind, title) = if output {
         ("output", "Output")
@@ -180,7 +189,16 @@ fn cable_spec(index: usize, output: bool) -> CableSpec {
     }
 }
 
-#[cfg(target_os = "linux")]
+/// Run the engine on a steady internal clock, for when no output device is the master.
+#[cfg(any(target_os = "linux", windows))]
+fn spawn_clock(engine: Engine, stop: Arc<AtomicBool>) -> Option<JoinHandle<()>> {
+    std::thread::Builder::new()
+        .name("audio-program-clock".to_string())
+        .spawn(move || clock_loop(engine, stop))
+        .ok()
+}
+
+#[cfg(any(target_os = "linux", windows))]
 fn clock_loop(mut engine: Engine, stop: Arc<AtomicBool>) {
     let period = Duration::from_nanos(1_000_000_000 * (BLOCK_FRAMES as u64) / (SAMPLE_RATE as u64));
     while !stop.load(Ordering::Relaxed) {
@@ -196,3 +214,7 @@ fn clock_loop(mut engine: Engine, stop: Arc<AtomicBool>) {
 #[cfg(test)]
 #[path = "session_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "reconnect_tests.rs"]
+mod reconnect_tests;

@@ -78,6 +78,8 @@ impl eframe::App for Mixer {
         ui.ctx()
             .request_repaint_after(std::time::Duration::from_millis(33));
         #[cfg(windows)]
+        self.session.poll();
+        #[cfg(windows)]
         let updates_before = self.check_updates;
         draw(
             ui,

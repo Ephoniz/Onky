@@ -1,6 +1,7 @@
 use eframe::egui::{self, Color32, RichText, Stroke, Vec2};
 
 use crate::session::Session;
+use crate::strip::Strip;
 
 const INK: Color32 = Color32::from_rgb(243, 239, 230);
 const MUTED: Color32 = Color32::from_rgb(176, 166, 150);
@@ -40,34 +41,48 @@ pub fn draw(ui: &mut egui::Ui, session: &mut Session, updates: Option<&mut bool>
     });
 
     egui::CentralPanel::default().show(ui, |ui| {
-        if let Some(error) = &session.error {
-            alert(ui, error);
-            ui.add_space(12.0);
-        }
-        let Some(shared) = session.shared() else {
-            if session.error.is_none() {
-                ui.label("No virtual cables are open.");
-            }
-            hardware(ui, session);
-            return;
-        };
-
-        ui.label(RichText::new("Strips").color(MUTED));
-        ui.add_space(6.0);
-        egui::ScrollArea::horizontal().show(ui, |ui| {
-            ui.horizontal(|ui| {
-                for cable in session.cables.clone() {
-                    strip(ui, &shared, &cable.description, cable.index, cable.output);
-                }
-            });
-        });
-
-        ui.add_space(16.0);
-        ui.label(RichText::new("Routing").color(MUTED));
-        ui.add_space(6.0);
-        routing(ui, &shared, session);
-        hardware(ui, session);
+        egui::ScrollArea::vertical().show(ui, |ui| mixer(ui, session));
     });
+}
+
+fn mixer(ui: &mut egui::Ui, session: &mut Session) {
+    if let Some(error) = &session.error {
+        alert(ui, error);
+        ui.add_space(12.0);
+    }
+    let Some(shared) = session.shared() else {
+        if session.error.is_none() {
+            ui.label("No virtual cables are open.");
+        }
+        hardware(ui, session);
+        return;
+    };
+    let strips = session.strips();
+
+    ui.label(RichText::new("Strips").color(MUTED));
+    ui.add_space(6.0);
+    if strips.is_empty() {
+        ui.label(RichText::new("Tick input and output devices below to add strips.").color(MUTED));
+    }
+    let mut new_master = None;
+    egui::ScrollArea::horizontal().show(ui, |ui| {
+        ui.horizontal(|ui| {
+            for item in &strips {
+                if strip(ui, &shared, item) {
+                    new_master = Some(item.index);
+                }
+            }
+        });
+    });
+    if let Some(output) = new_master {
+        set_master(session, output);
+    }
+
+    ui.add_space(16.0);
+    ui.label(RichText::new("Routing").color(MUTED));
+    ui.add_space(6.0);
+    routing(ui, &shared, &strips);
+    hardware(ui, session);
 }
 
 fn alert(ui: &mut egui::Ui, message: &str) {
@@ -82,13 +97,9 @@ fn alert(ui: &mut egui::Ui, message: &str) {
         });
 }
 
-fn strip(
-    ui: &mut egui::Ui,
-    shared: &audio_program_engine::Shared,
-    name: &str,
-    index: usize,
-    output: bool,
-) {
+/// Draw one strip. Returns true when the user picks this output as the master clock.
+fn strip(ui: &mut egui::Ui, shared: &audio_program_engine::Shared, item: &Strip) -> bool {
+    let mut picked_master = false;
     egui::Frame::new()
         .fill(PANEL)
         .inner_margin(10.0)
@@ -97,34 +108,36 @@ fn strip(
             ui.set_min_width(148.0);
             ui.set_max_width(180.0);
             ui.vertical(|ui| {
-                ui.label(RichText::new(name).size(13.0));
-                let kind = if output {
-                    "Virtual output"
-                } else {
-                    "Virtual input"
-                };
-                ui.label(RichText::new(kind).size(11.0).color(MUTED));
+                ui.label(RichText::new(&item.name).size(13.0));
+                ui.label(RichText::new(item.kind).size(11.0).color(MUTED));
+                if let Some(status) = &item.status {
+                    ui.label(RichText::new(status).size(11.0).color(ALERT));
+                }
                 ui.add_space(8.0);
-                if output {
-                    meter(ui, shared.peak_output(index));
+                if item.output {
+                    meter(ui, shared.peak_output(item.index));
                     ui.label(RichText::new("fed by the matrix").size(11.0).color(MUTED));
+                    if let Some(master) = item.master {
+                        picked_master = ui.radio(master, "Master clock").clicked() && !master;
+                    }
                 } else {
-                    let mut gain = shared.gain(index);
-                    let mut muted = shared.muted(index);
+                    let mut gain = shared.gain(item.index);
+                    let mut muted = shared.muted(item.index);
                     ui.add(
                         egui::Slider::new(&mut gain, 0.0..=1.5)
                             .vertical()
                             .show_value(false)
                             .text("gain"),
                     );
-                    shared.set_gain(index, gain);
-                    meter(ui, shared.peak_input(index));
+                    shared.set_gain(item.index, gain);
+                    meter(ui, shared.peak_input(item.index));
                     if ui.toggle_value(&mut muted, "Mute").changed() {
-                        shared.set_mute(index, muted);
+                        shared.set_mute(item.index, muted);
                     }
                 }
             });
         });
+    picked_master
 }
 
 fn meter(ui: &mut egui::Ui, peak: f32) {
@@ -137,19 +150,9 @@ fn meter(ui: &mut egui::Ui, peak: f32) {
     painter.rect_filled(filled, 2.0, AMBER);
 }
 
-fn routing(ui: &mut egui::Ui, shared: &audio_program_engine::Shared, session: &Session) {
-    let inputs: Vec<_> = session
-        .cables
-        .iter()
-        .filter(|cable| !cable.output)
-        .cloned()
-        .collect();
-    let outputs: Vec<_> = session
-        .cables
-        .iter()
-        .filter(|cable| cable.output)
-        .cloned()
-        .collect();
+fn routing(ui: &mut egui::Ui, shared: &audio_program_engine::Shared, strips: &[Strip]) {
+    let inputs: Vec<_> = strips.iter().filter(|item| !item.output).collect();
+    let outputs: Vec<_> = strips.iter().filter(|item| item.output).collect();
     if inputs.is_empty() || outputs.is_empty() {
         ui.label(RichText::new("Routing appears when both inputs and outputs exist.").color(MUTED));
         return;
@@ -159,15 +162,11 @@ fn routing(ui: &mut egui::Ui, shared: &audio_program_engine::Shared, session: &S
         .show(ui, |ui| {
             ui.label("");
             for output in &outputs {
-                ui.label(
-                    RichText::new(short(&output.description))
-                        .size(12.0)
-                        .color(MUTED),
-                );
+                ui.label(RichText::new(short(&output.name)).size(12.0).color(MUTED));
             }
             ui.end_row();
             for input in &inputs {
-                ui.label(short(&input.description));
+                ui.label(short(&input.name));
                 for output in &outputs {
                     let mut on = shared.routed(input.index, output.index);
                     if ui.checkbox(&mut on, "").changed() {
@@ -179,7 +178,16 @@ fn routing(ui: &mut egui::Ui, shared: &audio_program_engine::Shared, session: &S
         });
 }
 
-fn hardware(ui: &mut egui::Ui, session: &Session) {
+#[cfg(not(windows))]
+fn set_master(_session: &mut Session, _output: usize) {}
+
+#[cfg(windows)]
+fn set_master(session: &mut Session, output: usize) {
+    session.set_master(output);
+}
+
+#[cfg(not(windows))]
+fn hardware(ui: &mut egui::Ui, session: &mut Session) {
     if session.hardware.is_empty() {
         return;
     }
@@ -188,6 +196,44 @@ fn hardware(ui: &mut egui::Ui, session: &Session) {
     for device in &session.hardware {
         let kind = if device.output { "output" } else { "input" };
         ui.label(format!("{} · {kind}", device.name));
+    }
+}
+
+/// The device picker: each ticked device is a strip.
+#[cfg(windows)]
+fn hardware(ui: &mut egui::Ui, session: &mut Session) {
+    ui.add_space(16.0);
+    ui.horizontal(|ui| {
+        ui.label(RichText::new("Devices").color(MUTED));
+        if ui.button("Reconnect").clicked() {
+            session.reconnect();
+        }
+    });
+    ui.label(
+        RichText::new("Tick a device to make it a strip. Cables such as VB-Cable are devices too.")
+            .size(11.0)
+            .color(MUTED),
+    );
+    ui.add_space(6.0);
+    let choices = session.device_choices();
+    let mut toggled = None;
+    ui.columns(2, |columns| {
+        for (column, output, title) in [
+            (0, false, "Inputs (record from)"),
+            (1, true, "Outputs (play to)"),
+        ] {
+            let ui = &mut columns[column];
+            ui.label(RichText::new(title).strong());
+            for device in choices.iter().filter(|device| device.output == output) {
+                let mut on = session.uses(device);
+                if ui.checkbox(&mut on, &device.name).changed() {
+                    toggled = Some(device.clone());
+                }
+            }
+        }
+    });
+    if let Some(device) = toggled {
+        session.toggle_device(&device);
     }
 }
 
