@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - INF and WDK project with a pinned NuGet SDK/WDK, and a `driver` CI workflow that builds, test-signs and uploads `.sys`/`.inf`/`.cat`.
 - PowerShell scripts for test certificates, signing, test mode, install/uninstall (pnputil or devcon), cable count and status.
 - Sonicanvas smoke-test package and a step-by-step Windows testing guide (`driver/TESTING.md`).
+- Host unit tests for the cable ring buffer and cable count setting, and Pester tests for the driver scripts.
 
 ## [0.1.0-alpha.1] - 2026-10-16
 

@@ -25,7 +25,8 @@ gain or format conversion; the Audio Program app does that in user mode.
 | --- | --- |
 | `src/` | Driver source. Started from Microsoft's `simpleaudiosample` (MS-PL). |
 | `src/loopback_ring.h`, `src/loopback.h` | The cable ring buffer (MIT). Kernel-independent, unit-tested on the host. |
-| `tests/` | Host unit tests for the ring buffer. |
+| `src/cable_config.h` | Cable count limits, template and friendly names (MIT), unit-tested on the host. |
+| `tests/` | Host unit tests (C++) and Pester tests for the scripts. |
 | `AudioProgramCable.inx` | INF template; StampInf turns it into `AudioProgramCable.inf`. |
 | `AudioProgramCable.vcxproj` | WDK project (WDM driver, `WindowsKernelModeDriver10.0`). |
 | `packages.config`, `Directory.Build.props` | Pinned Windows SDK/WDK from NuGet (10.0.26100.6584). |
@@ -71,13 +72,16 @@ install is needed. The package lands in `driver\build\package`:
 
 The CI workflow `.github/workflows/driver.yml` does the same on
 `windows-latest` and uploads the `audio-program-cable-x64` artifact. It also
-runs the ring-buffer unit tests, checks the PowerShell scripts, and builds the
-Sonicanvas smoke-test package.
+runs the host unit tests, checks and tests the PowerShell scripts, and builds
+the Sonicanvas smoke-test package.
 
-Ring-buffer unit tests on any OS:
+Tests that need no Windows, from the repository root:
 
 ```sh
-c++ -std=c++17 -Wall -Wextra -Werror -I driver/src driver/tests/loopback_ring_test.cpp -o ring-test && ./ring-test
+for test in driver/tests/*.cpp; do
+  c++ -std=c++17 -Wall -Wextra -Werror -I driver/src "$test" -o test-bin && ./test-bin
+done
+pwsh -c 'Invoke-Pester driver/tests'   # Pester 5
 ```
 
 ## Install and test
