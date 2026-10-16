@@ -45,7 +45,7 @@ impl Session {
         self.shared.clone()
     }
 
-    #[allow(dead_code)]
+    #[cfg(not(target_os = "linux"))]
     fn empty(message: &str) -> Self {
         Self {
             cables: Vec::new(),
@@ -72,12 +72,7 @@ impl Drop for Session {
 #[cfg(target_os = "linux")]
 fn start_pipewire() -> Session {
     let mut engine = Engine::new();
-    for index in 0..CABLES {
-        engine.configure_input(index, 2, SAMPLE_RATE);
-        engine.configure_output(index, 2, SAMPLE_RATE, false);
-        engine.shared().set_gain(index, 1.0);
-        engine.shared().set_route(index, index, true);
-    }
+    configure_default(&mut engine);
     let shared = engine.shared();
     let stop = Arc::new(AtomicBool::new(false));
     let clock_stop = Arc::clone(&stop);
@@ -104,24 +99,14 @@ fn start_pipewire() -> Session {
     let mut cables = Vec::new();
     let mut error = None;
     for index in 0..CABLES {
-        let input = CableSpec {
-            node_name: format!("audio-program-virtual-input-{}", index + 1),
-            description: format!("Audio Program Virtual Input {}", index + 1),
-            index,
-        };
-        let output = CableSpec {
-            node_name: format!("audio-program-virtual-output-{}", index + 1),
-            description: format!("Audio Program Virtual Output {}", index + 1),
-            index,
-        };
-        match backend.create_virtual_input(input, &shared) {
+        match backend.create_virtual_input(cable_spec(index, false), &shared) {
             Ok(cable) => cables.push(cable),
             Err(err) => {
                 error = Some(err.to_string());
                 break;
             }
         }
-        match backend.create_virtual_output(output, &shared) {
+        match backend.create_virtual_output(cable_spec(index, true), &shared) {
             Ok(cable) => cables.push(cable),
             Err(err) => {
                 error = Some(err.to_string());
@@ -149,11 +134,7 @@ fn start_wasapi() -> Session {
     let hardware = backend.list_hardware().unwrap_or_default();
     let mut backend = backend;
     let shared = Engine::new().shared();
-    let probe = CableSpec {
-        node_name: "audio-program-virtual-input-1".to_string(),
-        description: "Audio Program Virtual Input 1".to_string(),
-        index: 0,
-    };
+    let probe = cable_spec(0, false);
     let error = match backend.create_virtual_input(probe, &shared) {
         Ok(_) => None,
         Err(BackendError::VirtualCableUnavailable(message)) => Some(message),
@@ -170,6 +151,30 @@ fn start_wasapi() -> Session {
     }
 }
 
+#[cfg(any(test, target_os = "linux"))]
+fn configure_default(engine: &mut Engine) {
+    for index in 0..CABLES {
+        engine.configure_input(index, 2, SAMPLE_RATE);
+        engine.configure_output(index, 2, SAMPLE_RATE, false);
+        engine.shared().set_gain(index, 1.0);
+        engine.shared().set_route(index, index, true);
+    }
+}
+
+fn cable_spec(index: usize, output: bool) -> CableSpec {
+    let (kind, title) = if output {
+        ("output", "Output")
+    } else {
+        ("input", "Input")
+    };
+    CableSpec {
+        node_name: format!("audio-program-virtual-{kind}-{}", index + 1),
+        description: format!("Audio Program Virtual {title} {}", index + 1),
+        index,
+    }
+}
+
+#[cfg(target_os = "linux")]
 fn clock_loop(mut engine: Engine, stop: Arc<AtomicBool>) {
     let period = Duration::from_nanos(1_000_000_000 * (BLOCK_FRAMES as u64) / (SAMPLE_RATE as u64));
     while !stop.load(Ordering::Relaxed) {
@@ -181,3 +186,7 @@ fn clock_loop(mut engine: Engine, stop: Arc<AtomicBool>) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "session_tests.rs"]
+mod tests;

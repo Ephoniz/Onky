@@ -191,3 +191,7 @@ fn hardware(ui: &mut egui::Ui, session: &Session) {
 fn short(description: &str) -> String {
     description.trim_start_matches("Audio Program ").to_string()
 }
+
+#[cfg(test)]
+#[path = "ui_tests.rs"]
+mod tests;
