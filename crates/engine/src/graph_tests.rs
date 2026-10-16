@@ -199,6 +199,7 @@ fn reference_session_cpu_budget() {
     );
 }
 
+#[cfg(target_os = "linux")]
 fn drive(engine: &Engine, block: u64, scratch: &[Frame]) {
     let input_ppm: [f64; 4] = [180.0, -220.0, 350.0, -140.0];
     for (input, ppm) in input_ppm.iter().enumerate() {
