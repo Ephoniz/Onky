@@ -466,6 +466,50 @@ mod tests {
     }
 
     #[test]
+    fn this_build_version_parses() {
+        assert!(super::current_version().is_some());
+    }
+
+    #[test]
+    fn first_alpha_sees_later_alphas_and_the_release_as_newer() {
+        let alpha = version("0.1.0-alpha.1");
+        for newer in ["0.1.0-alpha.2", "0.1.0-alpha.10", "0.1.0-beta.1", "0.1.0"] {
+            assert!(is_newer(&version(newer), &alpha), "{newer}");
+        }
+        assert!(!is_newer(&version("0.1.0-alpha.1"), &alpha));
+        assert!(is_newer(
+            &version("0.1.0-alpha.10"),
+            &version("0.1.0-alpha.2")
+        ));
+    }
+
+    #[test]
+    fn newest_prerelease_offer_uses_its_setup_name() {
+        let body = r#"[
+          {"tag_name":"v0.1.0-alpha.10","draft":false,"assets":[
+            {"name":"AudioProgram-Setup-0.1.0-alpha.10.exe","browser_download_url":"https://github.com/Ephoniz/Onky/releases/download/v0.1.0-alpha.10/AudioProgram-Setup-0.1.0-alpha.10.exe"},
+            {"name":"SHA256SUMS.txt","browser_download_url":"https://github.com/Ephoniz/Onky/releases/download/v0.1.0-alpha.10/SHA256SUMS.txt"}
+          ]},
+          {"tag_name":"v0.1.0-alpha.2","draft":false,"assets":[
+            {"name":"AudioProgram-Setup-0.1.0-alpha.2.exe","browser_download_url":"https://github.com/Ephoniz/Onky/releases/download/v0.1.0-alpha.2/AudioProgram-Setup-0.1.0-alpha.2.exe"},
+            {"name":"SHA256SUMS.txt","browser_download_url":"https://github.com/Ephoniz/Onky/releases/download/v0.1.0-alpha.2/SHA256SUMS.txt"}
+          ]},
+          {"tag_name":"v0.1.0-alpha.1","draft":false,"assets":[
+            {"name":"AudioProgram-Setup-0.1.0-alpha.1.exe","browser_download_url":"https://github.com/Ephoniz/Onky/releases/download/v0.1.0-alpha.1/AudioProgram-Setup-0.1.0-alpha.1.exe"},
+            {"name":"SHA256SUMS.txt","browser_download_url":"https://github.com/Ephoniz/Onky/releases/download/v0.1.0-alpha.1/SHA256SUMS.txt"}
+          ]}
+        ]"#;
+        let offer = newest_offer(&version("0.1.0-alpha.1"), body)
+            .unwrap()
+            .expect("offer");
+        assert_eq!(offer.tag, "v0.1.0-alpha.10");
+        assert_eq!(offer.setup_name, "AudioProgram-Setup-0.1.0-alpha.10.exe");
+        assert!(newest_offer(&version("0.1.0-alpha.10"), body)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
     fn updates_stay_on_unless_the_setting_says_off() {
         assert!(updates_enabled(""));
         assert!(updates_enabled("updates=on\n"));
