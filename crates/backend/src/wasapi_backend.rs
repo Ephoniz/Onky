@@ -12,8 +12,8 @@ use wasapi::{initialize_sta, DeviceEnumerator, Direction};
 
 use crate::wasapi_stream::{self, DeviceStream};
 use crate::{
-    BackendError, CableSpec, HardwareDevice, VirtualCable, VirtualCableBackend,
-    WINDOWS_VIRTUAL_CABLES,
+    supports_app_capture, wasapi_apps, AppSession, BackendError, CableSpec, HardwareDevice,
+    VirtualCable, VirtualCableBackend, WINDOWS_VIRTUAL_CABLES,
 };
 
 pub struct WasapiBackend;
@@ -53,6 +53,29 @@ impl WasapiBackend {
         shared: &Arc<Shared>,
     ) -> Result<DeviceStream, BackendError> {
         wasapi_stream::open_render(device_id, output, shared)
+    }
+
+    /// Whether this Windows can capture one app, which needs Windows 10 version 2004.
+    pub fn app_capture_supported(&self) -> bool {
+        supports_app_capture(wasapi_apps::windows_build())
+    }
+
+    /// Apps with an audio session, playing or paused.
+    pub fn list_apps(&self) -> Result<Vec<AppSession>, BackendError> {
+        wasapi_apps::list_apps()
+    }
+
+    /// Capture what process `pid` plays into engine input `input`, like a recording device.
+    ///
+    /// Nothing streams until [`DeviceStream::start`].
+    pub fn open_app_capture(
+        &self,
+        pid: u32,
+        include_children: bool,
+        input: usize,
+        shared: &Arc<Shared>,
+    ) -> Result<DeviceStream, BackendError> {
+        wasapi_stream::open_app_capture(pid, include_children, input, shared)
     }
 }
 

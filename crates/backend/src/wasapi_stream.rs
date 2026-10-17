@@ -10,7 +10,7 @@ use std::sync::{Arc, Mutex};
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use audio_program_engine::{Engine, Shared};
+use audio_program_engine::{Engine, Shared, SAMPLE_RATE};
 use wasapi::{
     initialize_mta, AudioClient, DeviceEnumerator, Direction, Handle, SampleType, StreamMode,
     WasapiError, WaveFormat,
@@ -24,16 +24,22 @@ use crate::{
 const FRAME_BYTES: usize = DEVICE_CHANNELS * std::mem::size_of::<f32>();
 const OPEN_TIMEOUT: Duration = Duration::from_secs(5);
 const WAIT_MS: u32 = 200;
+/// Buffer asked of an app capture, in 100 ns units.
+const APP_BUFFER_HNS: i64 = 200_000;
+/// Process loopback reports a meaningless buffer size, so app captures read into one second.
+const APP_BUFFER_FRAMES: usize = SAMPLE_RATE as usize;
 
 /// An initialized client, before its stream starts.
 ///
-/// Endpoints come from [`open_endpoint`]. A process-loopback client can be opened the same way
-/// and handed to the capture loop.
+/// Endpoints come from [`open_endpoint`], apps from [`open_process_loopback`].
 struct Opened {
     client: AudioClient,
     event: Handle,
     rate: u32,
     buffer_frames: usize,
+    /// Whether a quiet stream may ask the client if its device is still there.
+    /// A process-loopback client cannot answer.
+    probe: bool,
 }
 
 type Start = Option<Engine>;
@@ -89,6 +95,21 @@ pub fn open_capture(
     spawn(
         format!("audio-program-capture-{input}"),
         move || open_endpoint(&id, Direction::Capture),
+        move |opened, _engine, stop| capture_loop(opened, &shared, input, stop),
+    )
+}
+
+/// Capture what process `pid` plays, and its child processes when asked, into engine input `input`.
+pub fn open_app_capture(
+    pid: u32,
+    include_children: bool,
+    input: usize,
+    shared: &Arc<Shared>,
+) -> Result<DeviceStream, BackendError> {
+    let shared = Arc::clone(shared);
+    spawn(
+        format!("audio-program-app-{input}"),
+        move || open_process_loopback(pid, include_children),
         move |opened, _engine, stop| capture_loop(opened, &shared, input, stop),
     )
 }
@@ -206,6 +227,35 @@ fn open_endpoint(device_id: &str, direction: Direction) -> Result<Opened, String
         event,
         rate,
         buffer_frames,
+        probe: true,
+    })
+}
+
+fn open_process_loopback(pid: u32, include_children: bool) -> Result<Opened, String> {
+    let mut client =
+        AudioClient::new_application_loopback_client(pid, include_children).map_err(describe)?;
+    let format = WaveFormat::new(
+        32,
+        32,
+        &SampleType::Float,
+        SAMPLE_RATE as usize,
+        DEVICE_CHANNELS,
+        None,
+    );
+    let mode = StreamMode::EventsShared {
+        autoconvert: true,
+        buffer_duration_hns: APP_BUFFER_HNS,
+    };
+    client
+        .initialize_client(&format, &Direction::Capture, &mode)
+        .map_err(describe)?;
+    let event = client.set_get_eventhandle().map_err(describe)?;
+    Ok(Opened {
+        client,
+        event,
+        rate: SAMPLE_RATE,
+        buffer_frames: APP_BUFFER_FRAMES,
+        probe: false,
     })
 }
 
@@ -278,7 +328,9 @@ fn wait(opened: &Opened) -> Result<bool, String> {
     if opened.event.wait_for_event(WAIT_MS).is_ok() {
         return Ok(true);
     }
-    opened.client.get_current_padding().map_err(describe)?;
+    if opened.probe {
+        opened.client.get_current_padding().map_err(describe)?;
+    }
     Ok(false)
 }
 
