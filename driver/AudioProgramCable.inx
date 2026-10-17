@@ -1,0 +1,166 @@
+; SPDX-License-Identifier: MS-PL
+; Derived from Microsoft Windows-driver-samples audio/simpleaudiosample
+; (Source/Main/SimpleAudioSample.inx), Copyright (c) Microsoft Corporation.
+; Modifications Copyright (c) 2026 Audio Program contributors. Licensed under
+; the Microsoft Public License, see driver/LICENSES/MS-PL.txt.
+;
+; Audio Program Cable: one root-enumerated device that exposes N loopback
+; cables. Each cable is a stereo render endpoint looped to a stereo capture
+; endpoint. The driver registers the per-cable interfaces at runtime and
+; copies their settings from the four template interfaces below.
+
+[Version]
+Signature   = "$Windows NT$"
+Class       = MEDIA
+Provider    = %ProviderName%
+ClassGUID   = {4d36e96c-e325-11ce-bfc1-08002be10318}
+DriverVer   = 01/01/2026, 0.1.0.0
+CatalogFile = AudioProgramCable.cat
+PnpLockDown = 1
+
+[SourceDisksNames]
+222 = %DiskName%,"",222
+
+[SourceDisksFiles]
+AudioProgramCable.sys = 222
+
+[Manufacturer]
+%MfgName% = AudioProgramCable,NT$ARCH$.10.0...19041
+
+[AudioProgramCable.NT$ARCH$.10.0...19041]
+%AudioProgramCable.DeviceDesc% = AudioProgramCable_Device, ROOT\AudioProgramCable
+
+[DestinationDirs]
+AudioProgramCable_Device.CopyList = 13 ; 13 = package's DriverStore directory
+
+;======================================================
+; AudioProgramCable_Device
+;======================================================
+[AudioProgramCable_Device.CopyList]
+AudioProgramCable.sys
+
+[AudioProgramCable_Device.AddReg]
+HKR,,AssociatedFilters,,"wdmaud,swmidi,redbook"
+HKR,,Driver,,AudioProgramCable.sys
+
+HKR,Drivers,SubClasses,,"wave,mixer"
+
+HKR,Drivers\wave\wdmaud.drv,Driver,,wdmaud.drv
+HKR,Drivers\mixer\wdmaud.drv,Driver,,wdmaud.drv
+
+HKR,Drivers\wave\wdmaud.drv,Description,,%AudioProgramCable.DeviceDesc%
+HKR,Drivers\mixer\wdmaud.drv,Description,,%AudioProgramCable.DeviceDesc%
+
+;======================================================
+; Interface templates. These are never enabled; the driver copies them to
+; WaveCableRenderNN, TopologyCableRenderNN, WaveCableCaptureNN and
+; TopologyCableCaptureNN for every cable and sets "Audio Program Cable N"
+; as the friendly name.
+;======================================================
+[AudioProgramCable.I.WaveCableRender]
+AddReg = AudioProgramCable.I.WaveCableRender.AddReg
+
+[AudioProgramCable.I.WaveCableRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AudioProgramCable.Template.szPname%
+
+[AudioProgramCable.I.TopologyCableRender]
+AddReg = AudioProgramCable.I.TopologyCableRender.AddReg
+
+[AudioProgramCable.I.TopologyCableRender.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AudioProgramCable.Template.szPname%
+
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+
+; Opt in to event-driven (pull) mode.
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+
+[AudioProgramCable.I.WaveCableCapture]
+AddReg = AudioProgramCable.I.WaveCableCapture.AddReg
+
+[AudioProgramCable.I.WaveCableCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AudioProgramCable.Template.szPname%
+
+[AudioProgramCable.I.TopologyCableCapture]
+AddReg = AudioProgramCable.I.TopologyCableCapture.AddReg
+
+[AudioProgramCable.I.TopologyCableCapture.AddReg]
+HKR,,CLSID,,%Proxy.CLSID%
+HKR,,FriendlyName,,%AudioProgramCable.Template.szPname%
+
+HKR,EP\0,%PKEY_AudioEndpoint_Association%,,%KSNODETYPE_ANY%
+
+; Opt in to event-driven (pull) mode.
+HKR,EP\0,%PKEY_AudioEndpoint_Supports_EventDriven_Mode%,0x00010001,0x1
+
+;======================================================
+; Install sections
+;======================================================
+[AudioProgramCable_Device.NT]
+Include   = ks.inf,wdmaudio.inf
+Needs     = KS.Registration, WDMAUDIO.Registration
+CopyFiles = AudioProgramCable_Device.CopyList
+AddReg    = AudioProgramCable_Device.AddReg
+
+[AudioProgramCable_Device.NT.Interfaces]
+AddInterface = %KSCATEGORY_AUDIO%, %KSNAME_WaveCableRender%,      AudioProgramCable.I.WaveCableRender
+AddInterface = %KSCATEGORY_AUDIO%, %KSNAME_TopologyCableRender%,  AudioProgramCable.I.TopologyCableRender
+AddInterface = %KSCATEGORY_AUDIO%, %KSNAME_WaveCableCapture%,     AudioProgramCable.I.WaveCableCapture
+AddInterface = %KSCATEGORY_AUDIO%, %KSNAME_TopologyCableCapture%, AudioProgramCable.I.TopologyCableCapture
+
+[AudioProgramCable_Device.NT.Services]
+AddService = AudioProgramCable,0x00000002,AudioProgramCable_Service_Inst
+
+[AudioProgramCable_Service_Inst]
+DisplayName   = %AudioProgramCable.SvcDesc%
+ServiceType   = 1
+StartType     = 3
+ErrorControl  = 1
+ServiceBinary = %13%\AudioProgramCable.sys
+AddReg        = AudioProgramCable_Service_AddReg
+
+[AudioProgramCable_Service_AddReg]
+; Number of cables, read when the device starts (1..16). NOCLOBBER keeps a
+; value the user already set when the driver is reinstalled or updated.
+HKR,Parameters,CableCount,0x00010003,8
+
+[AudioProgramCable_Device.NT.HW]
+AddReg = AudioProgramCable_HW.AddReg
+
+[AudioProgramCable_HW.AddReg]
+; FILE_DEVICE_SOUND
+HKR,,DeviceType,0x10001,0x0000001D
+; SDDL_DEVOBJ_SYS_ALL_ADM_RWX_WORLD_RWX_RES_RWX
+HKR,,Security,,"D:P(A;;GA;;;SY)(A;;GRGWGX;;;BA)(A;;GRGWGX;;;WD)(A;;GRGWGX;;;RC)"
+
+;======================================================
+; Strings
+;======================================================
+[Strings]
+
+;Non-localizable
+
+KSNAME_WaveCableRender      = "WaveCableRender"
+KSNAME_TopologyCableRender  = "TopologyCableRender"
+KSNAME_WaveCableCapture     = "WaveCableCapture"
+KSNAME_TopologyCableCapture = "TopologyCableCapture"
+
+Proxy.CLSID         = "{17CCA71B-ECD7-11D0-B908-00A0C9223196}"
+KSCATEGORY_AUDIO    = "{6994AD04-93EF-11D0-A3CC-00A0C9223196}"
+
+KSNODETYPE_ANY      = "{00000000-0000-0000-0000-000000000000}"
+
+PKEY_AudioEndpoint_Association               = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},2"
+PKEY_AudioEndpoint_Supports_EventDriven_Mode = "{1DA5D803-D492-4EDD-8C23-E0C0FFEE7F0E},7"
+
+;Localizable
+
+ProviderName = "Audio Program"
+MfgName      = "Audio Program"
+DiskName     = "Audio Program Cable Driver Disk"
+
+AudioProgramCable.DeviceDesc     = "Audio Program Virtual Cables"
+AudioProgramCable.SvcDesc        = "Audio Program Virtual Cables Driver"
+AudioProgramCable.Template.szPname = "Audio Program Cable"

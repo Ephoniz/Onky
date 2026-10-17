@@ -1,0 +1,135 @@
+# SPDX-License-Identifier: MIT
+name: driver
+
+on:
+  push:
+    paths:
+      - "driver/**"
+      - ".github/workflows/driver.yml"
+  pull_request:
+    paths:
+      - "driver/**"
+      - ".github/workflows/driver.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: driver-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit-tests:
+    name: Host unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build and run (g++, sanitizers)
+        run: |
+          for test in driver/tests/*.cpp; do
+            g++ -std=c++17 -Wall -Wextra -Werror -O1 -g -fsanitize=address,undefined \
+              -I driver/src "$test" -o test-bin
+            ./test-bin
+          done
+      - name: Build and run (clang++)
+        run: |
+          for test in driver/tests/*.cpp; do
+            clang++ -std=c++17 -Wall -Wextra -Werror -O2 -I driver/src "$test" -o test-bin
+            ./test-bin
+          done
+
+  scripts:
+    name: PowerShell script checks
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and analyze
+        shell: pwsh
+        run: |
+          $errors = 0
+          foreach ($file in Get-ChildItem -Recurse -Filter *.ps1 driver) {
+            $tokens = $null; $parseErrors = $null
+            [System.Management.Automation.Language.Parser]::ParseFile($file.FullName, [ref]$tokens, [ref]$parseErrors) | Out-Null
+            foreach ($e in $parseErrors) { $errors++; Write-Host "::error file=$($file.FullName),line=$($e.Extent.StartLineNumber)::$($e.Message)" }
+          }
+          if ($errors) { exit 1 }
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module PSScriptAnalyzer -Scope CurrentUser -Force
+          $findings = Invoke-ScriptAnalyzer -Path driver -Recurse -Severity Warning,Error `
+            -ExcludeRule PSAvoidUsingWriteHost,PSUseShouldProcessForStateChangingFunctions,PSUseSingularNouns
+          $findings | Format-Table -AutoSize RuleName, ScriptName, Line, Message -Wrap
+          if ($findings) { exit 1 }
+      - name: Pester tests
+        shell: pwsh
+        run: |
+          Set-PSRepository PSGallery -InstallationPolicy Trusted
+          Install-Module Pester -MinimumVersion 5.5 -Scope CurrentUser -Force
+          $config = New-PesterConfiguration
+          $config.Run.Path = 'driver/tests'
+          $config.Run.Exit = $true
+          $config.Output.Verbosity = 'Detailed'
+          Invoke-Pester -Configuration $config
+
+  build:
+    name: WDK build (${{ matrix.configuration }})
+    runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        configuration: [Release, Debug]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+      - uses: NuGet/setup-nuget@v2
+      - name: Build, package and test-sign
+        # Windows PowerShell 5.1, the shell testers use.
+        shell: powershell
+        run: driver/build.ps1 -Configuration ${{ matrix.configuration }} -RestorePackages -TestSign -EphemeralCertificate
+      - name: Check package
+        shell: pwsh
+        run: |
+          $pkg = 'driver/build/package'
+          foreach ($name in 'AudioProgramCable.sys', 'AudioProgramCable.inf', 'AudioProgramCable.cat', 'AudioProgramCableTest.cer') {
+            if (-not (Test-Path (Join-Path $pkg $name))) { throw "missing $name" }
+          }
+          foreach ($name in 'AudioProgramCable.sys', 'AudioProgramCable.cat') {
+            $sig = Get-AuthenticodeSignature (Join-Path $pkg $name)
+            if (-not $sig.SignerCertificate) { throw "$name is not signed" }
+            Write-Host "$name signed by $($sig.SignerCertificate.Subject)"
+          }
+          $infverif = Get-ChildItem driver/packages -Recurse -Filter infverif.exe | Where-Object FullName -match '\\x64\\' | Select-Object -First 1
+          & $infverif.FullName /w /v (Join-Path $pkg 'AudioProgramCable.inf')
+          if ($LASTEXITCODE -ne 0) { throw "infverif failed: $LASTEXITCODE" }
+          $dumpbin = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -find 'VC\Tools\MSVC\**\bin\Hostx64\x64\dumpbin.exe' | Select-Object -First 1
+          if ($dumpbin) { & $dumpbin /nologo /dependents (Join-Path $pkg 'AudioProgramCable.sys') }
+          Get-Content (Join-Path $pkg 'BUILD-INFO.json')
+      - uses: actions/upload-artifact@v4
+        if: matrix.configuration == 'Release'
+        with:
+          name: audio-program-cable-x64
+          path: driver/build/package/
+          if-no-files-found: error
+
+  sonicanvas:
+    name: Sonicanvas smoke-test package
+    # Upstream builds and validates this commit on windows-2022.
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          msbuild-architecture: x64
+      - uses: NuGet/setup-nuget@v2
+      - name: Build Sonicanvas test package
+        shell: powershell
+        run: driver/smoke-test/sonicanvas/Build-SonicanvasPackage.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sonicanvas-smoke-test-x64
+          path: driver/build/smoke-test/sonicanvas/
+          if-no-files-found: error

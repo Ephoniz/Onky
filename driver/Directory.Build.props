@@ -1,0 +1,15 @@
+<!--
+  SPDX-License-Identifier: MIT
+  Uses the Windows SDK and WDK from NuGet (restored by build.ps1 -RestorePackages)
+  so the build does not depend on a WDK installed on the machine. When the
+  packages folder is absent, a locally installed WDK is used instead.
+-->
+<Project>
+  <PropertyGroup>
+    <AudioProgramKitVersion>10.0.28000.2526</AudioProgramKitVersion>
+    <AudioProgramPackages>$(MSBuildThisFileDirectory)packages</AudioProgramPackages>
+  </PropertyGroup>
+  <Import Project="$(AudioProgramPackages)\Microsoft.Windows.WDK.x64.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.WDK.x64.props" Condition="Exists('$(AudioProgramPackages)\Microsoft.Windows.WDK.x64.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.WDK.x64.props')" />
+  <Import Project="$(AudioProgramPackages)\Microsoft.Windows.SDK.CPP.x64.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.SDK.cpp.x64.props" Condition="Exists('$(AudioProgramPackages)\Microsoft.Windows.SDK.CPP.x64.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.SDK.cpp.x64.props')" />
+  <Import Project="$(AudioProgramPackages)\Microsoft.Windows.SDK.CPP.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.SDK.cpp.props" Condition="Exists('$(AudioProgramPackages)\Microsoft.Windows.SDK.CPP.$(AudioProgramKitVersion)\build\native\Microsoft.Windows.SDK.cpp.props')" />
+</Project>

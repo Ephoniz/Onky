@@ -8,8 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Added
 
-- Windows mixing: pick playback and recording devices as strips, including VB-Cable and other existing cables. Streams use WASAPI shared mode with the master output as the clock. Unplugged devices show on their strip and reconnect. The session is saved and restored.
 - Windows app capture: on Windows 10 version 2004 and later, an app that is playing sound can be an input strip without a cable, optionally with its child processes. It uses the documented process loopback, runs on the master clock like any input, and is restored by executable name. A closed app shows "Not running".
+
+## [0.1.0-alpha.2] - 2026-10-17
+
+### Added
+
+- Windows mixing: pick playback and recording devices as strips, including VB-Cable and other existing cables. Streams use WASAPI shared mode with the master output as the clock. Unplugged devices show on their strip and reconnect. The session is saved and restored.
+- Windows loopback driver (`driver/`): a PortCls WaveRT driver, started from Microsoft's `simpleaudiosample`, that creates "Audio Program Cable N" cables. Each cable is a stereo render endpoint looped to a stereo capture endpoint (48 kHz, 32-bit PCM). There are 8 cables by default, and the `CableCount` registry value sets 1 to 16, applied on device restart.
+- INF and WDK project with a pinned NuGet SDK/WDK, and a `driver` CI workflow that builds, test-signs and uploads `.sys`/`.inf`/`.cat`.
+- PowerShell scripts for test certificates, signing, test mode, install/uninstall (pnputil or devcon), cable count and status.
+- Sonicanvas smoke-test package and a step-by-step Windows testing guide (`driver/TESTING.md`).
+- Host unit tests for the cable ring buffer and cable count setting, and Pester tests for the driver scripts.
 
 ## [0.1.0-alpha.1] - 2026-10-16
 
