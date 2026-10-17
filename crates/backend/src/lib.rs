@@ -7,8 +7,10 @@ use std::sync::Arc;
 
 use audio_program_engine::Shared;
 
+mod apps;
 mod device_io;
 mod error;
+pub use apps::{add_session, exe_names, supports_app_capture, AppSession, APP_CAPTURE_NEEDS};
 pub use device_io::{
     device_error_text, fill_render, mix_ahead, push_capture, stream_rate, DEVICE_CHANNELS,
     MAX_DEVICE_RATE,
@@ -26,6 +28,8 @@ mod pipewire_backend;
 #[cfg(target_os = "linux")]
 pub use pipewire_backend::PipeWireBackend;
 
+#[cfg(windows)]
+mod wasapi_apps;
 #[cfg(windows)]
 mod wasapi_backend;
 #[cfg(windows)]

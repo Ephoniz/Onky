@@ -1,4 +1,4 @@
-//! The Windows session: chosen WASAPI endpoints as strips, saved between launches.
+//! The Windows session: chosen WASAPI endpoints and apps as strips, saved between launches.
 
 use std::path::PathBuf;
 use std::sync::atomic::AtomicBool;
@@ -6,12 +6,13 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use audio_program_backend::{
-    DeviceStream, HardwareDevice, VirtualCableBackend, WasapiBackend, DEVICE_CHANNELS,
+    AppSession, DeviceStream, HardwareDevice, VirtualCableBackend, WasapiBackend,
+    APP_CAPTURE_NEEDS, DEVICE_CHANNELS,
 };
-use audio_program_engine::Engine;
+use audio_program_engine::{Engine, Shared};
 
 use super::{should_reconnect, spawn_clock, Session};
-use crate::layout::{layout_path, Layout};
+use crate::layout::{app_exe, layout_path, AppChoice, InputStrip, Layout};
 use crate::strip::Strip;
 
 const REFRESH: Duration = Duration::from_secs(2);
@@ -25,11 +26,16 @@ pub(super) struct Devices {
     outputs: Vec<Slot>,
     present: Vec<String>,
     next_refresh: Option<Instant>,
+    app_capture: bool,
+    apps: Vec<AppSession>,
+    /// The process each input strip was opened for, from [`Layout::app_pids`].
+    app_pids: Vec<Option<u32>>,
 }
 
 enum Slot {
     Running(DeviceStream),
     Unavailable(String),
+    NotRunning,
 }
 
 impl Slot {
@@ -39,6 +45,7 @@ impl Slot {
                 .failure()
                 .map(|message| format!("Disconnected. {message}")),
             Slot::Unavailable(message) => Some(format!("Unavailable. {message}")),
+            Slot::NotRunning => Some("Not running.".to_string()),
         }
     }
 
@@ -69,6 +76,7 @@ pub(super) fn start_wasapi() -> Session {
         Ok(backend) => backend,
         Err(err) => return Session::empty(&err.to_string()),
     };
+    let app_capture = backend.app_capture_supported();
     let path = layout_path();
     let layout = path.as_deref().map(Layout::load).unwrap_or_default();
     let mut session = Session {
@@ -83,6 +91,7 @@ pub(super) fn start_wasapi() -> Session {
             saved: layout.clone(),
             layout,
             path,
+            app_capture,
             ..Devices::default()
         },
     };
@@ -109,6 +118,35 @@ impl Session {
         } else if !self.devices.layout.add(device) {
             return;
         }
+        self.rebuild();
+        self.save_layout();
+    }
+
+    /// Whether this Windows can capture an app. The picker shows why not otherwise.
+    pub fn app_capture_supported(&self) -> bool {
+        self.devices.app_capture
+    }
+
+    /// Apps the picker offers: those playing now, then app strips.
+    pub fn app_choices(&self) -> Vec<AppChoice> {
+        self.devices.layout.app_choices(&self.devices.apps)
+    }
+
+    /// Make an app a strip, or remove its strip.
+    pub fn toggle_app(&mut self, app: &AppChoice) {
+        self.capture_layout();
+        if app.used {
+            self.devices.layout.remove_app(&app.exe);
+        } else if !self.devices.layout.add_app(&app.exe, &app.name) {
+            return;
+        }
+        self.rebuild();
+        self.save_layout();
+    }
+
+    pub fn set_include_children(&mut self, exe: &str, include: bool) {
+        self.capture_layout();
+        self.devices.layout.set_include_children(exe, include);
         self.rebuild();
         self.save_layout();
     }
@@ -141,7 +179,11 @@ impl Session {
             .devices
             .slots()
             .any(|slot| matches!(slot, Slot::Unavailable(_)));
-        if should_reconnect(failed, changed, unavailable) {
+        let apps_moved = self
+            .devices
+            .layout
+            .apps_moved(&self.devices.app_pids, &self.devices.apps);
+        if should_reconnect(failed, changed, unavailable) || apps_moved {
             self.rebuild();
         }
     }
@@ -165,11 +207,14 @@ impl Session {
         }
     }
 
-    /// Re-list the endpoints. Returns whether the set of device ids changed.
+    /// Re-list the endpoints and apps. Returns whether the set of device ids changed.
     fn refresh_devices(&mut self) -> bool {
         let Some(backend) = &self.backend else {
             return false;
         };
+        if self.devices.app_capture {
+            self.devices.apps = backend.list_apps().unwrap_or_default();
+        }
         match backend.list_hardware() {
             Ok(hardware) => {
                 self.error = None;
@@ -210,14 +255,18 @@ impl Session {
                 Err(err) => Slot::Unavailable(err.to_string()),
             });
         }
+        let app_pids = layout.app_pids(&self.devices.apps);
         let mut inputs: Vec<Slot> = Vec::new();
-        for (index, strip) in layout.inputs.iter().enumerate() {
-            inputs.push(match backend.open_capture(&strip.id, index, &shared) {
-                Ok(stream) => {
+        for (index, (strip, pid)) in layout.inputs.iter().zip(&app_pids).enumerate() {
+            let app_capture = self.devices.app_capture;
+            let opened = open_input(backend, strip, *pid, app_capture, index, &shared);
+            inputs.push(match opened {
+                Some(Ok(stream)) => {
                     engine.configure_input(index, DEVICE_CHANNELS, stream.rate);
                     Slot::Running(stream)
                 }
-                Err(err) => Slot::Unavailable(err.to_string()),
+                Some(Err(message)) => Slot::Unavailable(message),
+                None => Slot::NotRunning,
             });
         }
         layout.apply(&shared);
@@ -239,6 +288,26 @@ impl Session {
         }
         self.devices.inputs = inputs;
         self.devices.outputs = outputs;
+        self.devices.app_pids = app_pids;
         self.shared = Some(shared);
     }
+}
+
+/// Open a device strip, or an app strip on its process `pid`. `None` when the app is not running.
+fn open_input(
+    backend: &WasapiBackend,
+    strip: &InputStrip,
+    pid: Option<u32>,
+    app_capture: bool,
+    index: usize,
+    shared: &Arc<Shared>,
+) -> Option<Result<DeviceStream, String>> {
+    let opened = if app_exe(&strip.id).is_none() {
+        backend.open_capture(&strip.id, index, shared)
+    } else if !app_capture {
+        return Some(Err(APP_CAPTURE_NEEDS.to_string()));
+    } else {
+        backend.open_app_capture(pid?, strip.include_children, index, shared)
+    };
+    Some(opened.map_err(|err| err.to_string()))
 }

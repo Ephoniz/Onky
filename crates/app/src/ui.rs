@@ -235,6 +235,54 @@ fn hardware(ui: &mut egui::Ui, session: &mut Session) {
     if let Some(device) = toggled {
         session.toggle_device(&device);
     }
+    apps(ui, session);
+}
+
+/// The app picker: each ticked app is an input strip of what that app plays.
+#[cfg(windows)]
+fn apps(ui: &mut egui::Ui, session: &mut Session) {
+    ui.add_space(12.0);
+    ui.label(RichText::new("Apps (record what an app plays)").strong());
+    if !session.app_capture_supported() {
+        ui.label(
+            RichText::new(audio_program_backend::APP_CAPTURE_NEEDS)
+                .size(11.0)
+                .color(MUTED),
+        );
+        return;
+    }
+    ui.label(
+        RichText::new(
+            "Apps playing sound now. The app still plays to its own speakers, \
+so route its strip elsewhere to avoid hearing it twice.",
+        )
+        .size(11.0)
+        .color(MUTED),
+    );
+    let choices = session.app_choices();
+    if choices.is_empty() {
+        ui.label(RichText::new("No app is playing sound.").color(MUTED));
+    }
+    let mut toggled = None;
+    let mut children = None;
+    for app in &choices {
+        ui.horizontal(|ui| {
+            let mut on = app.used;
+            if ui.checkbox(&mut on, &app.name).changed() {
+                toggled = Some(app.clone());
+            }
+            let mut include = app.include_children;
+            if app.used && ui.checkbox(&mut include, "with child processes").changed() {
+                children = Some((app.exe.clone(), include));
+            }
+        });
+    }
+    if let Some(app) = toggled {
+        session.toggle_app(&app);
+    }
+    if let Some((exe, include)) = children {
+        session.set_include_children(&exe, include);
+    }
 }
 
 fn short(description: &str) -> String {
