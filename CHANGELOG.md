@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Windows mixing: pick playback and recording devices as strips, including VB-Cable and other existing cables. Streams use WASAPI shared mode with the master output as the clock. Unplugged devices show on their strip and reconnect. The session is saved and restored.
+- Windows app capture: on Windows 10 version 2004 and later, an app that is playing sound can be an input strip without a cable, optionally with its child processes. It uses the documented process loopback, runs on the master clock like any input, and is restored by executable name. A closed app shows "Not running".
 
 ## [0.1.0-alpha.1] - 2026-10-16
 

@@ -40,7 +40,9 @@ Cables that another driver already installed, such as VB-Cable or VoiceMeeter, a
 
 If a device is unplugged or its format changes, its strip says so and the rest keeps playing. The strip comes back when Windows lists the device again, or when you press **Reconnect**. The chosen devices, faders, mutes, routes, and master are saved in `%APPDATA%\Audio Program\session.json`.
 
-CI builds and installs this mixer, but has no sound card. Streaming has to be checked on a real PC. Capturing one application without a cable (process loopback) is not in the app yet.
+On Windows 10 version 2004 and later, an application can be a strip without a cable. Under **Apps**, the window lists the apps playing sound now. Tick one, such as Spotify or a game, and its strip records what that app plays, with the same fader, mute, and routes as a device. Tick **with child processes** to include the processes it started. This copies the app's sound: the app still plays to its own speakers, so route its strip somewhere else, or you hear it twice. The strip is saved by executable name. When the app is closed it says "Not running" and starts again when the app does. Older Windows shows a note instead of the list.
+
+CI builds and installs this mixer, but has no sound card. Streaming has to be checked on a real PC.
 
 WASAPI does not create virtual cables. A shared-mode loopback of a speaker is a recording of that endpoint, and other applications cannot select it as a device. Audio Program's own selectable cables come from the kernel driver developed separately under `driver/`.
 
