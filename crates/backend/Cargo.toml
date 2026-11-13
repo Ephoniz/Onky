@@ -14,7 +14,7 @@ audio-program-engine = { path = "../engine" }
 pipewire = { version = "0.10.1", features = ["v1_0_0"] }
 
 [target.'cfg(windows)'.dependencies]
-wasapi = "0.26"
+wasapi = "0.27"
 
 [lints]
 workspace = true
